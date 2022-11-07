@@ -1,0 +1,15 @@
+{
+  "domain": "csg_stat",
+  "name": "China Southern Power Grid",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/csg_stat",
+  "requirements": ["pycryptodome==3.15.0"],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": [
+    "@cubicpill"
+  ],
+  "iot_class": "cloud_polling"
+}
