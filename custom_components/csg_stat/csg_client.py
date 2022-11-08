@@ -32,6 +32,7 @@ DEFAULT_AREA_CODE = {
     "guiz": "060000",  # Guizhou
     "hn": "070000",  # Hainan
 }
+AREACODE_FALLBACK=DEFAULT_AREA_CODE['gd']
 
 
 # https://95598.csg.cn/js/chunk-31aec193.1.6.177.1667607288138.js
@@ -98,7 +99,7 @@ def decrypt_params(encrypted: str) -> dict:
 class CSGWebClient:
     """Implementation of APIs"""
 
-    def __init__(self, area_code):
+    def __init__(self):
         self._session: requests.Session = requests.Session()
         self._common_headers = {
             "Host": "95598.csg.cn",
@@ -112,7 +113,7 @@ class CSGWebClient:
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
         }
         self.x_auth_token = ""
-        self.area_code = area_code
+        self.area_code = AREACODE_FALLBACK
 
     def _make_request(
         self, path: str, payload: dict, with_auth: bool = True, method: str = "POST"
@@ -141,7 +142,7 @@ class CSGWebClient:
         """Send SMS verification code to phone_no"""
         path = "center/sendMsg"
         payload = {
-            "areaCode": self.area_code,
+            "areaCode": AREACODE_FALLBACK,
             "phoneNumber": phone_no,
             "vcType": VERIFICATION_CODE_TYPE_LOGIN,
             "msgType": SEND_MSG_TYPE_VERIFICATION_CODE,
@@ -155,7 +156,7 @@ class CSGWebClient:
         """Login with phone number and SMS code"""
         path = "center/login"
         payload = {
-            "areaCode": self.area_code,
+            "areaCode": AREACODE_FALLBACK,
             "acctId": phone_no,
             "logonChan": LOGIN_CHANNEL_ONLINE_HALL,
             "credType": LONGIN_TYPE_PHONE_CODE,
@@ -171,7 +172,7 @@ class CSGWebClient:
         """Login with phone number and password"""
         path = "center/login"
         payload = {
-            "areaCode": self.area_code,
+            "areaCode": AREACODE_FALLBACK,
             "acctId": phone_no,
             "logonChan": LOGIN_CHANNEL_ONLINE_HALL,
             "credType": LONGIN_TYPE_PHONE_PWD,
@@ -189,7 +190,7 @@ class CSGWebClient:
             raise ValueError(f'Channel "{channel}" is invalid')
         path = "center/createLoginQrcode"
         payload = {
-            "areaCode": self.area_code,
+            "areaCode": AREACODE_FALLBACK,
             "channel": channel,
             # not a typo, original js is like so
             "lgoinId": generate_qr_login_id(),
@@ -203,7 +204,7 @@ class CSGWebClient:
     def get_qr_login_update(self, login_id: str):
         """Get update about qr code (whether it has been scanned)"""
         path = "/center/getLoginInfo"
-        payload = {"areaCode": self.area_code, "loginId": login_id}
+        payload = {"areaCode": AREACODE_FALLBACK, "loginId": login_id}
         resp_header, resp_data = self._make_request(path, payload, with_auth=False)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             # login success
