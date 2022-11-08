@@ -1,4 +1,4 @@
-"""The China Southern Power Grid integration."""
+"""The China Southern Power Grid Statistics integration."""
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
