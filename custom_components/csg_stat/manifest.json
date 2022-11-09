@@ -1,5 +1,5 @@
 {
-  "domain": "csg_stat",
+  "domain": "china_southern_power_grid",
   "name": "China Southern Power Grid Statistics",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/csg_stat",

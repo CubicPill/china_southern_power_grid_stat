@@ -1,4 +1,10 @@
-"""Config flow for China Southern Power Grid Statistics integration."""
+"""
+Config flow for China Southern Power Grid Statistics integration.
+Steps:
+1. User input account credentials (username and password), the validity of credential verified
+2. Get all electricity accounts bound to the user account, let user select one of them
+3. Get the rest of needed parameters and save the config entries
+"""
 from __future__ import annotations
 
 import logging
@@ -11,32 +17,31 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
+
 from .const import DOMAIN
-from .csg_client import CSGWebClient
+from .csg_client import CSGWebClient, CSGAPIError
+from requests import RequestException
 
 _LOGGER = logging.getLogger(__name__)
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required("username"): str,
-        vol.Required("password"): str,
-        # vol.Required("auth_token"): str,
-        # vol.Required("area_code"): str,
-        # vol.Required("customer_id"): str,
-        # vol.Required("customer_number"): str,
-        # vol.Required("metering_point_id"): str,
-    }
-)
+
+def authenticate_csg(username: str, password: str) -> dict[str, Any]:
+    client = CSGWebClient()
+    try:
+        client.authenticate(username, password)
+    except CSGAPIError:
+        return {"ok": False, "reason": "wrong_cred"}
+    except RequestException:
+        return {"ok": False, "reason": "network"}
+    else:
+        return {"ok": True, "reason": None, "data": client}
 
 
-def authenticate_csg(username: str, password: str) -> dict[str, str]:
-    pass
-
-
-async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
-
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
+async def validate_input(
+    hass: HomeAssistant, data: dict[str, str]
+) -> CSGWebClient | None:
+    """
+    Validate the credentials (login)
     """
 
     authenticate_result = await hass.async_add_executor_job(
@@ -47,17 +52,15 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             raise InvalidAuth
         elif authenticate_result["reason"] == "network":
             raise CannotConnect
+        else:
+            # won't reach here
+            pass
 
-    # If you cannot connect:
-    # throw CannotConnect
-    # If the authentication is wrong:
-    # InvalidAuth
-
-    # Return info that you want to store in the config entry.
-    return {"title": "title", "data": authenticate_result["entries"]}
+    # Return the client object
+    return authenticate_result["data"]
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for China Southern Power Grid Statistics."""
 
     VERSION = 1
@@ -65,16 +68,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the initial step."""
+        """
+        Handle the initial step.
+        Login and get all electricity accounts for later use
+        """
+        schema = vol.Schema(
+            {
+                vol.Required("username"): str,
+                vol.Required("password"): str,
+            }
+        )
+
         if user_input is None:
-            return self.async_show_form(
-                step_id="user", data_schema=STEP_USER_DATA_SCHEMA
-            )
+            return self.async_show_form(step_id="user", data_schema=schema)
 
         errors = {}
-        await self.async_set_unique_id(user_input["username"])
-        # TODO: uid should be username+account_no
-        self._abort_if_unique_id_configured()
 
         try:
             result = await validate_input(self.hass, user_input)
@@ -86,11 +94,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
-            return self.async_create_entry(title=result["title"], data=result["data"])
+            return await self.async_step_select_account()
 
-        return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
-        )
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    async def async_step_select_account(self, user_input: str = None) -> FlowResult:
+        """Let user select specific electricity account"""
+
+        all_accounts = []
+        schema = vol.Schema({vol.Required("account_no"): vol.In([all_accounts])})
+        if user_input is None:
+            return self.async_show_form(step_id="select_account", data_schema=schema)
+
+        await self.async_set_unique_id(user_input["account_no"])
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(title=f'CSG{user_input["account_no"]}', data={})
 
 
 class CannotConnect(HomeAssistantError):

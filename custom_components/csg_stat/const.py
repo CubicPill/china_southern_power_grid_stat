@@ -1,3 +1,3 @@
 """Constants for the China Southern Power Grid integration."""
 
-DOMAIN = "csg_stat"
+DOMAIN = "china_southern_power_grid"
