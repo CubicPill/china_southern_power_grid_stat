@@ -1,7 +1,4 @@
 {
   "name": "China Southern Power Grid Statistics",
-  "domains": [
-    "sensor"
-  ],
   "render_readme": true
 }

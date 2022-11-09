@@ -11,16 +11,14 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
-
+from requests import RequestException
 
 from .const import DOMAIN
-from .csg_client import CSGWebClient, CSGAPIError
-from requests import RequestException
+from .csg_client import CSGAPIError, CSGWebClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,14 +36,14 @@ def authenticate_csg(username: str, password: str) -> dict[str, Any]:
 
 
 async def validate_input(
-    hass: HomeAssistant, data: dict[str, str]
+        hass: HomeAssistant, data: dict[str, str]
 ) -> CSGWebClient | None:
     """
     Validate the credentials (login)
     """
 
     authenticate_result = await hass.async_add_executor_job(
-        authenticate_csg, data["username"], data["password"]
+            authenticate_csg, data["username"], data["password"]
     )
     if not authenticate_result["ok"]:
         if authenticate_result["reason"] == "wrong_cred":
@@ -66,17 +64,17 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """
         Handle the initial step.
         Login and get all electricity accounts for later use
         """
         schema = vol.Schema(
-            {
-                vol.Required("username"): str,
-                vol.Required("password"): str,
-            }
+                {
+                    vol.Required("username"): str,
+                    vol.Required("password"): str,
+                }
         )
 
         if user_input is None:
@@ -98,7 +96,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
-    async def async_step_select_account(self, user_input: str = None) -> FlowResult:
+    async def async_step_select_account(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Let user select specific electricity account"""
 
         all_accounts = []

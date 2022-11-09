@@ -3,7 +3,9 @@
   "name": "China Southern Power Grid Statistics",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/csg_stat",
-  "requirements": ["pycryptodome==3.15.0"],
+  "requirements": [
+    "pycryptodome==3.15.0"
+  ],
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},
@@ -11,5 +13,6 @@
   "codeowners": [
     "@cubicpill"
   ],
-  "iot_class": "cloud_polling"
+  "iot_class": "cloud_polling",
+  "version": "1.0.0-alpha"
 }
