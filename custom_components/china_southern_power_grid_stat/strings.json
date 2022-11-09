@@ -2,9 +2,10 @@
   "config": {
     "step": {
       "user": {
+        "title": "Login to SCG consumer service platform",
+        "description": "Use your phone number and password  to login",
         "data": {
-          "host": "[%key:common::config_flow::data::host%]",
-          "username": "[%key:common::config_flow::data::username%]",
+          "username": "Phone number",
           "password": "[%key:common::config_flow::data::password%]"
         }
       }
@@ -16,6 +17,24 @@
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Choose action",
+        "description": "Select one of the actions",
+        "data": {
+          "add_account": "Add electricity account"
+        }
+      },
+      "select_account": {
+        "title": "Select electricity account",
+        "description": "Select one of the electricity accounts",
+        "data": {
+          "add_account": "Add electricity account"
+        }
+      }
     }
   }
 }

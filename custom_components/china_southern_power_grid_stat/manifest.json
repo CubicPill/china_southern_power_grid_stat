@@ -2,7 +2,8 @@
   "domain": "china_southern_power_grid_stat",
   "name": "China Southern Power Grid Statistics",
   "config_flow": true,
-  "documentation": "https://www.home-assistant.io/integrations/csg_stat",
+  "documentation": "https://github.com/CubicPill/china_southern_power_grid_stat/",
+  "issue_tracker": "https://github.com/CubicPill/china_southern_power_grid_stat/issues",
   "requirements": [
     "pycryptodome==3.15.0"
   ],

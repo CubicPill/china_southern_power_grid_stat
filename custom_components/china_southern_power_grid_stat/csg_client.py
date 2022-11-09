@@ -176,7 +176,8 @@ class CSGWebClient:
             "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
         }
 
-        self.x_auth_token: str = ""
+        self.auth_token: str = ""
+        self.login_type: LoginType = LoginType.LOGIN_TYPE_PWD
         self.accounts: dict[str:CSGElectrityAccount] = {}
 
     def restore(self, data: dict[str:str]):
@@ -184,25 +185,17 @@ class CSGWebClient:
         Restore the session info to client object
         The validity of the session won't be checked
         """
-        for k in [
-            "x_auth_token",
-            "accounts",
-        ]:
+        for k in ['auth_token', 'login_type']:
             if not data.get(k):
                 raise ValueError(f"missing parameter: {k}")
-            setattr(self, k, data["k"])
-
-        if not data.get("cookies"):
-            raise ValueError("missing cookies")
         self._session.cookies.clear()
-        self._session.cookies.update(data["cookies"])
+        self.set_authentication_params(auth_token=data['auth_token'], login_type=LoginType(data['login_type']))
 
     def dump(self) -> dict[str, Any]:
         """Dump the session to dict"""
         return {
-            "x_auth_token": self.x_auth_token,
-            "accounts": self.accounts,
-            "cookies": self._session.cookies.get_dict(),
+            "auth_token": self.auth_token,
+            "login_type": self.login_type.value,
         }
 
     def authenticate(self, phone_no: str, password: str):
@@ -210,15 +203,15 @@ class CSGWebClient:
         Authenticate the client using phone number and password
         Will set session parameters
         """
-        x_auth_token = self.api_login_with_password(phone_no, password)
-        self.set_authentication_params(x_auth_token, LoginType.LOGIN_TYPE_PWD)
+        auth_token = self.api_login_with_password(phone_no, password)
+        self.set_authentication_params(auth_token, LoginType.LOGIN_TYPE_PWD)
 
-    def set_authentication_params(self, x_auth_token: str, login_type: LoginType):
-        """Set self.x_auth_token and client generated cookies"""
-        self.x_auth_token = x_auth_token
+    def set_authentication_params(self, auth_token: str, login_type: LoginType):
+        """Set self.auth_token and client generated cookies"""
+        self.auth_token = auth_token
         self._session.cookies.update(
                 {
-                    "token": x_auth_token,
+                    "token": auth_token,
                     "is-login": "true",
                     SESSION_KEY_LOGIN_TYPE: login_type.value,
                 }
@@ -251,7 +244,7 @@ class CSGWebClient:
             for _k, _v in custom_headers:
                 headers[_k] = _v
         if with_auth:
-            headers["x-auth-token"] = self.x_auth_token
+            headers["x-auth-token"] = self.auth_token
         if method == "POST":
             response = self._session.post(url, json=payload, headers=headers)
             if response.status_code != 200:
@@ -347,7 +340,7 @@ class CSGWebClient:
         resp_header, resp_data = self._make_request(path, payload, with_auth=False)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             # login success
-            self.x_auth_token = resp_header["x-auth-token"]
+            self.auth_token = resp_header["x-auth-token"]
             return resp_header["x-auth-token"]
         elif resp_data["sta"] == RESP_STA_QR_TIMEOUT:
             # qr expired

@@ -11,10 +11,22 @@
         "step": {
             "user": {
                 "data": {
-                    "host": "Host",
                     "password": "Password",
-                    "username": "Username"
-                }
+                    "username": "Phone number"
+                },
+                "description": "Use your phone number and password  to login",
+                "title": "Login to SCG consumer service platform"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "data": {
+                    "add_account": "Add electricity account"
+                },
+                "description": "Select one of the actions",
+                "title": "Choose action"
             }
         }
     }
