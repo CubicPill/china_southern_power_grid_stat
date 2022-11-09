@@ -125,13 +125,13 @@ class CSGElectrityAccount:
     """Represents one electricity account, identified by account number (缴费号)"""
 
     def __init__(
-            self,
-            account_number: str,
-            area_code: AreaCode,
-            customer_id: str,
-            metering_point_id: str,
-            address: str,
-            user_name: str,
+        self,
+        account_number: str,
+        area_code: AreaCode,
+        customer_id: str,
+        metering_point_id: str,
+        address: str,
+        user_name: str,
     ):
         # the parameters are independent for each electricity account
 
@@ -185,11 +185,13 @@ class CSGWebClient:
         Restore the session info to client object
         The validity of the session won't be checked
         """
-        for k in ['auth_token', 'login_type']:
+        for k in ("auth_token", "login_type"):
             if not data.get(k):
                 raise ValueError(f"missing parameter: {k}")
         self._session.cookies.clear()
-        self.set_authentication_params(auth_token=data['auth_token'], login_type=LoginType(data['login_type']))
+        self.set_authentication_params(
+            auth_token=data["auth_token"], login_type=LoginType(data["login_type"])
+        )
 
     def dump(self) -> dict[str, Any]:
         """Dump the session to dict"""
@@ -210,15 +212,15 @@ class CSGWebClient:
         """Set self.auth_token and client generated cookies"""
         self.auth_token = auth_token
         self._session.cookies.update(
-                {
-                    "token": auth_token,
-                    "is-login": "true",
-                    SESSION_KEY_LOGIN_TYPE: login_type.value,
-                }
+            {
+                "token": auth_token,
+                "is-login": "true",
+                SESSION_KEY_LOGIN_TYPE: login_type.value,
+            }
         )
 
     def initialize(
-            self,
+        self,
     ):
         """
         Intialize the client
@@ -226,12 +228,12 @@ class CSGWebClient:
         """
 
     def _make_request(
-            self,
-            path: str,
-            payload: dict or None,
-            with_auth: bool = True,
-            method: str = "POST",
-            custom_headers: dict = None,
+        self,
+        path: str,
+        payload: dict or None,
+        with_auth: bool = True,
+        method: str = "POST",
+        custom_headers: dict = None,
     ):
         """
         Function to make the http request to api endpoints
@@ -249,7 +251,7 @@ class CSGWebClient:
             response = self._session.post(url, json=payload, headers=headers)
             if response.status_code != 200:
                 _LOGGER.error(
-                        "API call %s returned status code %d", path, response.status_code
+                    "API call %s returned status code %d", path, response.status_code
                 )
                 raise CSGAPIError(f"api call returned http {response.status_code}")
             response_data = response.json()
@@ -265,7 +267,7 @@ class CSGWebClient:
         if response_data["sta"] == RESP_STA_NO_LOGIN:
             raise NotLoggedIn()
         raise CSGAPIError(
-                f"Error {response_data['sta']}, message: {response_data['message']}"
+            f"Error {response_data['sta']}, message: {response_data['message']}"
         )
 
     def api_send_login_sms(self, phone_no: str):
@@ -293,7 +295,7 @@ class CSGWebClient:
             "code": code,
         }
         resp_header, resp_data = self._make_request(
-                path, payload, with_auth=False, custom_headers={"need-crypto": "true"}
+            path, payload, with_auth=False, custom_headers={"need-crypto": "true"}
         )
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_header["x-auth-token"]
@@ -310,7 +312,7 @@ class CSGWebClient:
             "credentials": encrypt_credential(password),
         }
         resp_header, resp_data = self._make_request(
-                path, payload, with_auth=False, custom_headers={"need-crypto": "true"}
+            path, payload, with_auth=False, custom_headers={"need-crypto": "true"}
         )
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_header["x-auth-token"]
@@ -342,12 +344,12 @@ class CSGWebClient:
             # login success
             self.auth_token = resp_header["x-auth-token"]
             return resp_header["x-auth-token"]
-        elif resp_data["sta"] == RESP_STA_QR_TIMEOUT:
+        if resp_data["sta"] == RESP_STA_QR_TIMEOUT:
             # qr expired
             raise QrCodeExpired()
-        else:
-            # not scanned yet, just wait
-            return False
+
+        # not scanned yet, just wait
+        return False
 
     def api_get_user_info(self) -> dict:
         """Get account info"""
@@ -367,12 +369,12 @@ class CSGWebClient:
         self._handle_unsuccessful_response(resp_data)
 
     def api_query_day_electric_by_m_point(
-            self,
-            year: int,
-            month: int,
-            area_code: str,
-            customer_id: str,
-            metering_point_id: str,
+        self,
+        year: int,
+        month: int,
+        area_code: str,
+        customer_id: str,
+        metering_point_id: str,
     ) -> dict:
         """get usage(kWh) by day in the given month"""
         path = "charge/queryDayElectricByMPoint"
@@ -432,16 +434,16 @@ class CSGWebClient:
 
         for item in ele_user_resp_data:
             charge_resp_data = self.api_query_charges(
-                    item["area_code"], item["bindingId"]
+                item["area_code"], item["bindingId"]
             )
             metering_point_id = charge_resp_data[0]["points"][0]["meteringPointId"]
             account = CSGElectrityAccount(
-                    item["eleCustNumber"],
-                    item["area_code"],
-                    item["bindingId"],
-                    metering_point_id,
-                    item["eleAddress"],
-                    item["userName"],
+                item["eleCustNumber"],
+                item["area_code"],
+                item["bindingId"],
+                metering_point_id,
+                item["eleAddress"],
+                item["userName"],
             )
             result.append(account)
         return result
@@ -453,11 +455,11 @@ class CSGWebClient:
         account: CSGElectrityAccount = self.accounts[account_no]
 
         resp_data = self.api_query_day_electric_by_m_point(
-                year,
-                month,
-                account.area_code,
-                account.customer_id,
-                account.metering_point_id,
+            year,
+            month,
+            account.area_code,
+            account.customer_id,
+            account.metering_point_id,
         )
         month_total_kwh = resp_data["totalPower"]
         by_day = []
@@ -470,7 +472,7 @@ class CSGWebClient:
         account: CSGElectrityAccount = self.accounts[account_no]
 
         resp_data = self.api_query_account_surplus(
-                account.area_code, account.customer_id
+            account.area_code, account.customer_id
         )
         balance = resp_data[0]["balance"]
         arrears = resp_data[0]["arrears"]
@@ -481,7 +483,7 @@ class CSGWebClient:
         account: CSGElectrityAccount = self.accounts[account_no]
         year = datetime.datetime.now().year
         resp_data = self.api_get_fee_analyze_details(
-                year, account.area_code, account.customer_id
+            year, account.area_code, account.customer_id
         )
 
         total_year_kwh = resp_data["totalBillingElectricity"]
@@ -489,11 +491,11 @@ class CSGWebClient:
         by_month = []
         for m_data in resp_data["electricAndChargeList"]:
             by_month.append(
-                    {
-                        "month": m_data["yearMonth"],
-                        "charge": m_data["actualTotalAmount"],
-                        "kwh": m_data["billingElectricity"],
-                    }
+                {
+                    "month": m_data["yearMonth"],
+                    "charge": m_data["actualTotalAmount"],
+                    "kwh": m_data["billingElectricity"],
+                }
             )
         return {
             "year_total_charge": total_year_charge,

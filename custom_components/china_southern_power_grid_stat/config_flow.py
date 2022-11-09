@@ -12,19 +12,20 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import (CONF_PASSWORD, CONF_USERNAME)
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from requests import RequestException
 
-from .const import (CONF_AUTH_TOKEN, CONF_LOGIN_TYPE, DOMAIN)
+from .const import CONF_AUTH_TOKEN, CONF_LOGIN_TYPE, DOMAIN
 from .csg_client import CSGAPIError, CSGWebClient
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def authenticate_csg(username: str, password: str) -> dict[str, Any]:
+    """use username and password combination to authenticate"""
     client = CSGWebClient()
     try:
         client.authenticate(username, password)
@@ -37,23 +38,20 @@ def authenticate_csg(username: str, password: str) -> dict[str, Any]:
 
 
 async def validate_input(
-        hass: HomeAssistant, data: dict[str, str]
+    hass: HomeAssistant, data: dict[str, str]
 ) -> dict[str, Any] | None:
     """
     Validate the credentials (login)
     """
 
     authenticate_result = await hass.async_add_executor_job(
-            authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD]
+        authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD]
     )
     if not authenticate_result["ok"]:
         if authenticate_result["reason"] == "wrong_cred":
             raise InvalidAuth
-        elif authenticate_result["reason"] == "network":
+        if authenticate_result["reason"] == "network":
             raise CannotConnect
-        else:
-            # won't reach here
-            pass
 
     client: CSGWebClient = authenticate_result["data"]
     return client.dump()
@@ -67,23 +65,23 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-            config_entry: config_entries.ConfigEntry,
+        config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
         return CSGOptionsFlowHandler(config_entry)
 
     async def async_step_user(
-            self, user_input: dict[str, Any] | None = None
+        self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """
         Handle the initial step.
         Login and get all electricity accounts for later use
         """
         schema = vol.Schema(
-                {
-                    vol.Required(CONF_USERNAME): str,
-                    vol.Required(CONF_PASSWORD): str,
-                }
+            {
+                vol.Required(CONF_USERNAME): str,
+                vol.Required(CONF_PASSWORD): str,
+            }
         )
 
         if user_input is None:
@@ -103,12 +101,15 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         else:
             await self.async_set_unique_id(user_input[CONF_USERNAME])
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(title=user_input[CONF_USERNAME], data={
-                CONF_USERNAME: user_input[CONF_USERNAME],
-                CONF_PASSWORD: user_input[CONF_PASSWORD],
-                CONF_AUTH_TOKEN: session_data[CONF_AUTH_TOKEN],
-                CONF_LOGIN_TYPE: session_data[CONF_LOGIN_TYPE]
-            })
+            return self.async_create_entry(
+                title=user_input[CONF_USERNAME],
+                data={
+                    CONF_USERNAME: user_input[CONF_USERNAME],
+                    CONF_PASSWORD: user_input[CONF_PASSWORD],
+                    CONF_AUTH_TOKEN: session_data[CONF_AUTH_TOKEN],
+                    CONF_LOGIN_TYPE: session_data[CONF_LOGIN_TYPE],
+                },
+            )
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
@@ -134,35 +135,36 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         self.config_entry = config_entry
 
     async def async_step_init(
-            self, user_input: dict[str, Any] | None = None
+        self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
 
-        schema = vol.Schema({
-            vol.Required('action', default='add_account'): vol.In({'add_account': "Add account"}),
-        })
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        return self.async_show_form(
-                step_id="init",
-                data_schema=vol.Schema(
-                        {
-                            vol.Required(
-                                    "show_things",
-                                    default=self.config_entry.options.get("show_things"),
-                            ): bool
-                        }
+        schema = vol.Schema(
+            {
+                vol.Required("action", default="add_account"): vol.In(
+                    {"add_account": "Add account"}
                 ),
+            }
         )
+        if user_input is not None:
+            return await self.async_step_select_account()
 
-    async def async_step_select_account(self, user_input: dict[str, Any] | None = None):
+        return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def async_step_select_account(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select one of the electricity accounts from current account"""
         # account_no: f'{account_no} ({name} {addr})'
         all_accounts = {}
 
-        schema = vol.Schema({
-            vol.Required('account_number', default='add_account'): vol.In(all_accounts),
-        })
+        schema = vol.Schema(
+            {
+                vol.Required("account_number", default="add_account"): vol.In(
+                    all_accounts
+                ),
+            }
+        )
 
 
 class CannotConnect(HomeAssistantError):
