@@ -170,16 +170,16 @@ class CSGElectricityAccount:
 
     def load(self, data: dict):
         """deserialize this object"""
-        for k in [
+        for k in (
             "account_number",
             "area_code",
             "ele_customer_id",
             "metering_point_id",
             "address_redacted",
             "user_name_redacted",
-        ]:
+        ):
             if k not in data:
-                raise ValueError("Missing key %s", k)
+                raise ValueError(f"Missing key {k}")
             if k == "area_code":
                 self._area_code = AreaCode(data[k])
             else:
@@ -187,6 +187,7 @@ class CSGElectricityAccount:
 
     @property
     def area_code(self) -> str:
+        """area_code so it returns the string"""
         return str(self._area_code.value)
 
 
@@ -229,58 +230,6 @@ class CSGWebClient:
         self.customer_number = None
 
     # begin internal utility functions
-
-    # end internal utility functions
-
-    # begin raw api functions
-
-    # end raw api functions
-
-    def restore_session(self, data: dict[str:str]):
-        """
-        Restore the session info to client object
-        The validity of the session won't be checked
-        `initialize()` needs to be called for the client to be usable
-        """
-        for k in ("auth_token", "login_type"):
-            if not data.get(k):
-                raise ValueError(f"missing parameter: {k}")
-        self._session.cookies.clear()
-        self.set_authentication_params(
-            auth_token=data["auth_token"], login_type=LoginType(data["login_type"])
-        )
-
-    def dump_session(self) -> dict[str, Any]:
-        """Dump the session to dict"""
-        return {
-            "auth_token": self.auth_token,
-            "login_type": self.login_type.value,
-        }
-
-    def authenticate(self, phone_no: str, password: str):
-        """
-        Authenticate the client using phone number and password
-        Will set session parameters
-        """
-        auth_token = self.api_login_with_password(phone_no, password)
-        self.set_authentication_params(auth_token, LoginType.LOGIN_TYPE_PWD)
-
-    def set_authentication_params(self, auth_token: str, login_type: LoginType):
-        """Set self.auth_token and client generated cookies"""
-        self.auth_token = auth_token
-        self._session.cookies.update(
-            {
-                "token": auth_token,
-                "is-login": "true",
-                SESSION_KEY_LOGIN_TYPE: login_type.value,
-            }
-        )
-
-    def initialize(self):
-        """Initialize the client"""
-        resp_data = self.api_get_user_info()
-        self.customer_number = resp_data["custNumber"]
-
     def _make_request(
         self,
         path: str,
@@ -329,6 +278,9 @@ class CSGWebClient:
             f"Error {response_data['sta']}, message: {response_data['message']}"
         )
 
+    # end internal utility functions
+
+    # begin raw api functions
     def api_send_login_sms(self, phone_no: str):
         """Send SMS verification code to phone_no"""
         path = "center/sendMsg"
@@ -489,6 +441,58 @@ class CSGWebClient:
             return resp_data["data"]
         self._handle_unsuccessful_response(resp_data)
 
+    # end raw api functions
+
+    # begin utility functions
+    def restore_session(self, data: dict[str:str]):
+        """
+        Restore the session info to client object
+        The validity of the session won't be checked
+        `initialize()` needs to be called for the client to be usable
+        """
+        for k in ("auth_token", "login_type"):
+            if not data.get(k):
+                raise ValueError(f"missing parameter: {k}")
+        self._session.cookies.clear()
+        self.set_authentication_params(
+            auth_token=data["auth_token"], login_type=LoginType(data["login_type"])
+        )
+
+    def dump_session(self) -> dict[str, Any]:
+        """Dump the session to dict"""
+        return {
+            "auth_token": self.auth_token,
+            "login_type": self.login_type.value,
+        }
+
+    def set_authentication_params(self, auth_token: str, login_type: LoginType):
+        """Set self.auth_token and client generated cookies"""
+        self.auth_token = auth_token
+        self._session.cookies.update(
+            {
+                "token": auth_token,
+                "is-login": "true",
+                SESSION_KEY_LOGIN_TYPE: login_type.value,
+            }
+        )
+
+    def authenticate(self, phone_no: str, password: str):
+        """
+        Authenticate the client using phone number and password
+        Will set session parameters
+        """
+        auth_token = self.api_login_with_password(phone_no, password)
+        self.set_authentication_params(auth_token, LoginType.LOGIN_TYPE_PWD)
+
+    def initialize(self):
+        """Initialize the client"""
+        resp_data = self.api_get_user_info()
+        self.customer_number = resp_data["custNumber"]
+
+    # end utility functions
+
+    # begin high-level api wrappers
+
     def get_all_electricity_accounts(self) -> list[CSGElectricityAccount]:
         """Get all electricity accounts linked to current account"""
         result = []
@@ -563,3 +567,5 @@ class CSGWebClient:
             "year_total_kwh": total_year_kwh,
             "by_month": by_month,
         }
+
+    # end high-level api wrappers
