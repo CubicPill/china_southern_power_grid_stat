@@ -19,7 +19,7 @@ from homeassistant.exceptions import HomeAssistantError
 from requests import RequestException
 
 from .const import CONF_AUTH_TOKEN, CONF_LOGIN_TYPE, DOMAIN
-from .csg_client import CSGAPIError, CSGWebClient
+from .csg_client import CSGAPIError, CSGElectricityAccount, CSGWebClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ async def validate_input(
             raise CannotConnect
 
     client: CSGWebClient = authenticate_result["data"]
-    return client.dump()
+    return client.dump_session()
 
 
 class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -102,7 +102,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input[CONF_USERNAME])
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
-                title=user_input[CONF_USERNAME],
+                title=f"CSG-{user_input[CONF_USERNAME]}",
                 data={
                     CONF_USERNAME: user_input[CONF_USERNAME],
                     CONF_PASSWORD: user_input[CONF_PASSWORD],
@@ -113,19 +113,6 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
-    # async def async_step_select_account(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-    #     """Let user select specific electricity account"""
-    #
-    #     all_accounts = []
-    #     schema = vol.Schema({vol.Required(CONF_ACCOUNT_NUMBER): vol.In([all_accounts])})
-    #     if user_input is None:
-    #         return self.async_show_form(step_id="select_account", data_schema=schema)
-    #
-    #     await self.async_set_unique_id(user_input[CONF_ACCOUNT_NUMBER])
-    #     self._abort_if_unique_id_configured()
-    #     return self.async_create_entry(title=f'CSG{user_input[CONF_ACCOUNT_NUMBER]}', data={})
-    #
-
 
 class CSGOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for China Southern Power Grid Statistics."""
@@ -133,6 +120,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
         self.config_entry = config_entry
+        self.all_electricity_accounts: list[CSGElectricityAccount] = []
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -156,14 +144,66 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Select one of the electricity accounts from current account"""
         # account_no: f'{account_no} ({name} {addr})'
-        all_accounts = {}
+
+        schema_no_selections = vol.Schema(
+            {
+                vol.Required("account_number", default="add_account"): vol.In([]),
+            }
+        )
+        if user_input:
+            electricity_account_number = user_input["account_number"]
+            for account in self.all_electricity_accounts:
+                if account.account_number == electricity_account_number:
+                    return self.async_create_entry(
+                        title=f"CSGELE={electricity_account_number}", data={}
+                    )
+
+        all_entries = self.hass.config_entries.async_entries(DOMAIN)
+        client: CSGWebClient | None = None
+        for entry in all_entries:
+            if entry.data.get(CONF_AUTH_TOKEN):
+                client = CSGWebClient()
+                await self.hass.async_add_executor_job(
+                    client.authenticate,
+                    entry.data[CONF_USERNAME],
+                    entry.data[CONF_PASSWORD],
+                )
+
+                # client.restore_session(
+                #     {
+                #         CONF_AUTH_TOKEN: entry.data[CONF_AUTH_TOKEN],
+                #         CONF_LOGIN_TYPE: entry.data[CONF_LOGIN_TYPE],
+                #     }
+                # )
+                await self.hass.async_add_executor_job(client.initialize)
+                break
+        if not client:
+            return self.async_show_form(
+                step_id="select_account",
+                data_schema=schema_no_selections,
+                errors={"base": "no_config"},
+            )
+        accounts = await self.hass.async_add_executor_job(
+            client.get_all_electricity_accounts
+        )
+        self.all_electricity_accounts = accounts
+
+        selections = {}
+        for account in accounts:
+            selections[
+                account.account_number
+            ] = f"{account.account_number} {account.user_name_redacted} {account.address_redacted}"
 
         schema = vol.Schema(
             {
                 vol.Required("account_number", default="add_account"): vol.In(
-                    all_accounts
+                    selections
                 ),
             }
+        )
+        return self.async_show_form(
+            step_id="select_account",
+            data_schema=schema,
         )
 
 
