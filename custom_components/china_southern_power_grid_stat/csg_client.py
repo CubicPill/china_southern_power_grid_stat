@@ -22,12 +22,14 @@ from Crypto.PublicKey import RSA
 
 _LOGGER = logging.getLogger(__name__)
 
-BASE_PATH = "https://95598.csg.cn/ucs/ma/wt/"
+# BASE_PATH_WEB = "https://95598.csg.cn/ucs/ma/wt/"
+BASE_PATH_APP = "https://95598.csg.cn/ucs/ma/zt/"
 
 # https://95598.csg.cn/js/app.1.6.177.1667607288138.js
 PARAM_KEY = "cOdHFNHUNkZrjNaN".encode("utf8")
 PARAM_IV = "oMChoRLZnTivcQyR".encode("utf8")
-LOGIN_CHANNEL_ONLINE_HALL = "3"
+LOGON_CHANNEL_ONLINE_HALL = "3"  # web
+LOGON_CHANNEL_HANDHELD_HALL = "4"  # app
 RESP_STA_SUCCESS = "00"
 RESP_STA_EMPTY_PARAMETER = "01"
 RESP_STA_SYSTEM_ERROR = "02"
@@ -193,9 +195,8 @@ class CSGElectricityAccount:
 
 class CSGWebClient:
     """
-    Implementation of APIs from browser web interface
-    By default, the cookies will expire the moment the browser is closed (expires: session)
-    But it's actually valid for a long time
+    Implementation of APIs from CSG iOS app interface.
+    Parameters and consts are from web app js, however, these interfaces are virtually the same
 
     Do not call any functions starts with _api unless you are certain about what you're doing
 
@@ -203,31 +204,30 @@ class CSGWebClient:
     First call `CSGWebClient.authenticate`, this will authenticate the client using username and password.
     Then call `CSGWebClient.initialize`
     To get all linked electricity accounts, call `get_all_electricity_accounts`
-    Use the account objects to call the utility functions
-
-
+    Use the account objects to call the utility functions and wrapped api functions
     """
 
     def __init__(self):
         self._session: requests.Session = requests.Session()
         self._common_headers = {
             "Host": "95598.csg.cn",
-            "Connection": "keep-alive",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/107.0.0.0 Safari/537.36",
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/plain, */*",
-            "Origin": "https://95598.csg.cn",
-            "Referer": "https://95598.csg.cn/",
+            "Content-Type": "application/json;charset=utf-8",
+            "Origin": "file://",
+            "x-auth-token": "",
             "Accept-Encoding": "gzip, deflate, br",
-            "Accept-Language": "en-GB,en;q=0.9,en-US;q=0.8",
+            "Connection": "keep-alive",
+            "Accept": "application/json, text/plain, */*",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko)",
+            "custNumber": "",
+            "Accept-Language": "zh-CN,cn;q=0.9",
         }
 
         self.auth_token: str = ""
         self.login_type: LoginType = LoginType.LOGIN_TYPE_PWD
 
         # identifier
-        self.customer_number = None
+        self.customer_number: str = ""
 
     # begin internal utility functions
     def _make_request(
@@ -243,13 +243,14 @@ class CSGWebClient:
         can automatically add authentication header(s)
         """
         _LOGGER.debug("_make_request: %s, %s, %s, %s", path, payload, with_auth, method)
-        url = BASE_PATH + path
+        url = BASE_PATH_APP + path
         headers = copy(self._common_headers)
         if custom_headers:
             for _k, _v in custom_headers.items():
                 headers[_k] = _v
         if with_auth:
             headers["x-auth-token"] = self.auth_token
+            headers["custNumber"] = self.customer_number
         if method == "POST":
             response = self._session.post(url, json=payload, headers=headers)
             if response.status_code != 200:
@@ -258,7 +259,7 @@ class CSGWebClient:
                 )
                 raise CSGAPIError(f"api call returned http {response.status_code}")
             response_data = response.json()
-            _LOGGER.debug("_make_request: response: %s", response_data)
+            _LOGGER.debug("_make_request: response: %s", json.dumps(response_data))
 
             # headers need to be returned since they may contain additional data
             return response.headers, response_data
@@ -301,7 +302,7 @@ class CSGWebClient:
         payload = {
             "areaCode": AREACODE_FALLBACK,
             "acctId": phone_no,
-            "logonChan": LOGIN_CHANNEL_ONLINE_HALL,
+            "logonChan": LOGON_CHANNEL_HANDHELD_HALL,
             "credType": LOGIN_TYPE_PHONE_CODE,
             "code": code,
         }
@@ -318,7 +319,7 @@ class CSGWebClient:
         payload = {
             "areaCode": AREACODE_FALLBACK,
             "acctId": phone_no,
-            "logonChan": LOGIN_CHANNEL_ONLINE_HALL,
+            "logonChan": LOGON_CHANNEL_HANDHELD_HALL,
             "credType": LOGIN_TYPE_PHONE_PWD,
             "credentials": encrypt_credential(password),
         }
@@ -330,43 +331,20 @@ class CSGWebClient:
             return resp_header["x-auth-token"]
         self._handle_unsuccessful_response(resp_data)
 
-    def api_create_login_qr_code(self, channel: str) -> str:
-        """Create QR code to scan"""
-        if channel not in ["app", "wechat", "alipay"]:
-            raise ValueError(f'Channel "{channel}" is invalid')
-        path = "center/createLoginQrcode"
-        payload = {
-            "areaCode": AREACODE_FALLBACK,
-            "channel": channel,
-            # not a typo, original js is like so
-            "lgoinId": generate_qr_login_id(),
-        }
-        _, resp_data = self._make_request(path, payload, with_auth=False)
+    def api_query_authentication_result(self) -> dict:
+        """Contains custNumber, used to verify login"""
+        path = "user/queryAuthenticationResult"
+        payload = None
+        _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
-            code_url = resp_data["data"]
-            return code_url
+            return resp_data["data"]
         self._handle_unsuccessful_response(resp_data)
-
-    def api_get_qr_login_update(self, login_id: str):
-        """Get update about qr code (whether it has been scanned)"""
-        path = "/center/getLoginInfo"
-        payload = {"areaCode": AREACODE_FALLBACK, "loginId": login_id}
-        resp_header, resp_data = self._make_request(path, payload, with_auth=False)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            # login success
-            self.auth_token = resp_header["x-auth-token"]
-            return resp_header["x-auth-token"]
-        if resp_data["sta"] == RESP_STA_QR_TIMEOUT:
-            # qr expired
-            raise QrCodeExpired()
-
-        # not scanned yet, just wait
-        return False
 
     def api_get_user_info(self) -> dict:
         """Get account info"""
         path = "user/getUserInfo"
-        _, resp_data = self._make_request(path, None)
+        payload = None
+        _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
         self._handle_unsuccessful_response(resp_data)
@@ -374,9 +352,28 @@ class CSGWebClient:
     def api_get_all_linked_electricity_accounts(self) -> list:
         """List all linked electricity accounts under this account"""
         path = "eleCustNumber/queryBindEleUsers"
-        _, resp_data = self._make_request(path, None)
+        _, resp_data = self._make_request(path, {})
         if resp_data["sta"] == RESP_STA_SUCCESS:
             _LOGGER.debug("Total %d users under this account", len(resp_data["data"]))
+            return resp_data["data"]
+        self._handle_unsuccessful_response(resp_data)
+
+    def api_get_metering_point(
+        self,
+        area_code: str,
+        ele_customer_id: str,
+    ) -> dict:
+        """Get metering point id"""
+        path = "charge/queryMeteringPoint"
+        payload = {
+            "areaCode": area_code,
+            "eleCustNumberList": [
+                {"eleCustId": ele_customer_id, "areaCode": area_code}
+            ],
+        }
+        custom_headers = {"funid": "100t002"}
+        _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
+        if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
         self._handle_unsuccessful_response(resp_data)
 
@@ -396,7 +393,8 @@ class CSGWebClient:
             "yearMonth": f"{year}{month:02d}",
             "meteringPointId": metering_point_id,
         }
-        _, resp_data = self._make_request(path, payload)
+        custom_headers = {"funid": "100t002"}
+        _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
         self._handle_unsuccessful_response(resp_data)
@@ -421,8 +419,21 @@ class CSGWebClient:
             "areaCode": area_code,
             "electricityBillYear": year,
             "eleCustId": ele_customer_id,
-            "meteringPointId": None,
+            "meteringPointId": None,  # this is set to null in api
         }
+        _, resp_data = self._make_request(path, payload)
+        if resp_data["sta"] == RESP_STA_SUCCESS:
+            return resp_data["data"]
+        self._handle_unsuccessful_response(resp_data)
+
+    def api_query_day_electric_by_m_point_yesterday(
+        self,
+        area_code: str,
+        ele_customer_id: str,
+    ) -> dict:
+        """Contains: power consumption(kWh) of yesterday"""
+        path = "charge/queryDayElectricByMPointYesterday"
+        payload = {"eleCustId": ele_customer_id, "areaCode": area_code}
         _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
@@ -453,7 +464,7 @@ class CSGWebClient:
         for k in ("auth_token", "login_type"):
             if not data.get(k):
                 raise ValueError(f"missing parameter: {k}")
-        self._session.cookies.clear()
+        # self._session.cookies.clear()
         self.set_authentication_params(
             auth_token=data["auth_token"], login_type=LoginType(data["login_type"])
         )
@@ -468,13 +479,13 @@ class CSGWebClient:
     def set_authentication_params(self, auth_token: str, login_type: LoginType):
         """Set self.auth_token and client generated cookies"""
         self.auth_token = auth_token
-        self._session.cookies.update(
-            {
-                "token": auth_token,
-                "is-login": "true",
-                SESSION_KEY_LOGIN_TYPE: login_type.value,
-            }
-        )
+        # self._session.cookies.update(
+        #     {
+        #         "token": auth_token,
+        #         "is-login": "true",
+        #         SESSION_KEY_LOGIN_TYPE: login_type.value,
+        #     }
+        # )
 
     def authenticate(self, phone_no: str, password: str):
         """
@@ -489,6 +500,14 @@ class CSGWebClient:
         resp_data = self.api_get_user_info()
         self.customer_number = resp_data["custNumber"]
 
+    def verify_login(self) -> bool:
+        """Verify validity of the session"""
+        try:
+            self.api_query_authentication_result()
+        except NotLoggedIn:
+            return False
+        return True
+
     # end utility functions
 
     # begin high-level api wrappers
@@ -499,10 +518,10 @@ class CSGWebClient:
         ele_user_resp_data = self.api_get_all_linked_electricity_accounts()
 
         for item in ele_user_resp_data:
-            charge_resp_data = self.api_query_charges(
+            metering_point_data = self.api_get_metering_point(
                 item["areaCode"], item["bindingId"]
             )
-            metering_point_id = charge_resp_data[0]["points"][0]["meteringPointId"]
+            metering_point_id = metering_point_data[0]["meteringPointId"]
             account = CSGElectricityAccount(
                 item["eleCustNumber"],
                 AreaCode(item["areaCode"]),
@@ -526,10 +545,10 @@ class CSGWebClient:
             account.ele_customer_id,
             account.metering_point_id,
         )
-        month_total_kwh = resp_data["totalPower"]
+        month_total_kwh = float(resp_data["totalPower"])
         by_day = []
         for d_data in resp_data["result"]:
-            by_day.append({"date": d_data["date"], "kwh": d_data["power"]})
+            by_day.append({"date": d_data["date"], "kwh": float(d_data["power"])})
         return {"month_total_kwh": month_total_kwh, "by_day": by_day}
 
     def get_balance_and_arrears(
@@ -542,7 +561,7 @@ class CSGWebClient:
         )
         balance = resp_data[0]["balance"]
         arrears = resp_data[0]["arrears"]
-        return balance, arrears
+        return float(balance), float(arrears)
 
     def get_year_month_stats(self, account: CSGElectricityAccount) -> dict:
         """Get year total kWh, year total charge, kWh/charge by month in current year"""
@@ -558,14 +577,21 @@ class CSGWebClient:
             by_month.append(
                 {
                     "month": m_data["yearMonth"],
-                    "charge": m_data["actualTotalAmount"],
-                    "kwh": m_data["billingElectricity"],
+                    "charge": float(m_data["actualTotalAmount"]),
+                    "kwh": float(m_data["billingElectricity"]),
                 }
             )
         return {
-            "year_total_charge": total_year_charge,
-            "year_total_kwh": total_year_kwh,
+            "year_total_charge": float(total_year_charge),
+            "year_total_kwh": float(total_year_kwh),
             "by_month": by_month,
         }
+
+    def get_yesterday_kwh(self, account: CSGElectricityAccount) -> float:
+        """Get power consumption(kwh) of yesterday"""
+        resp_data = self.api_query_day_electric_by_m_point_yesterday(
+            account.area_code, account.ele_customer_id
+        )
+        return float(resp_data["power"])
 
     # end high-level api wrappers
