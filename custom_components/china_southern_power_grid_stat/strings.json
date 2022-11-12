@@ -2,10 +2,10 @@
   "config": {
     "step": {
       "user": {
-        "title": "Login to SCG consumer service platform",
-        "description": "Use your phone number and password  to login",
+        "title": "登陆南方电网",
+        "description": "使用手机号和密码登录",
         "data": {
-          "username": "Phone number",
+          "username": "手机号",
           "password": "[%key:common::config_flow::data::password%]"
         }
       }
@@ -22,19 +22,17 @@
   "options": {
     "step": {
       "init": {
-        "title": "Choose action",
-        "description": "Select one of the actions",
+        "title": "选择操作",
         "data": {
-          "add_account": "Add electricity account"
+          "add_account": "添加已绑定的缴费号"
         }
       },
       "select_account": {
-        "title": "Select electricity account",
-        "description": "Select one of the electricity accounts",
-        "data": {
-          "add_account": "Add electricity account"
-        }
+        "title": "选择缴费号"
       }
+    },
+    "error": {
+      "no_config": "找不到账户配置"
     }
   }
 }

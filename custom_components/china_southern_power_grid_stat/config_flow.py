@@ -2,7 +2,7 @@
 Config flow for China Southern Power Grid Statistics integration.
 Steps:
 1. User input account credentials (username and password), the validity of credential verified
-2. Get all electricity accounts bound to the user account, let user select one of them
+2. Get all electricity accounts linked to the user account, let user select one of them
 3. Get the rest of needed parameters and save the config entries
 """
 from __future__ import annotations
@@ -19,41 +19,32 @@ from homeassistant.exceptions import HomeAssistantError
 from requests import RequestException
 
 from .const import CONF_AUTH_TOKEN, CONF_LOGIN_TYPE, DOMAIN
-from .csg_client import CSGAPIError, CSGElectricityAccount, CSGWebClient
+from .csg_client import (CSGClient, CSGElectricityAccount, InvalidCredentials)
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def authenticate_csg(username: str, password: str) -> dict[str, Any]:
+def authenticate_csg(username: str, password: str) -> CSGClient:
     """use username and password combination to authenticate"""
-    client = CSGWebClient()
+    client = CSGClient()
     try:
         client.authenticate(username, password)
-    except CSGAPIError:
-        return {"ok": False, "reason": "wrong_cred"}
-    except RequestException:
-        return {"ok": False, "reason": "network"}
+    except InvalidCredentials as exc:
+        raise InvalidAuth from exc
+    except RequestException as exc:
+        raise CannotConnect from exc
     else:
-        return {"ok": True, "reason": None, "data": client}
+        return client
 
 
 async def validate_input(
     hass: HomeAssistant, data: dict[str, str]
 ) -> dict[str, Any] | None:
-    """
-    Validate the credentials (login)
-    """
+    """Validate the credentials (login)"""
 
-    authenticate_result = await hass.async_add_executor_job(
+    client = await hass.async_add_executor_job(
         authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD]
     )
-    if not authenticate_result["ok"]:
-        if authenticate_result["reason"] == "wrong_cred":
-            raise InvalidAuth
-        if authenticate_result["reason"] == "network":
-            raise CannotConnect
-
-    client: CSGWebClient = authenticate_result["data"]
     return client.dump_session()
 
 
@@ -147,7 +138,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
 
         schema_no_selections = vol.Schema(
             {
-                vol.Required("account_number", default="add_account"): vol.In([]),
+                vol.Required("account_number"): vol.In(["no_account"]),
             }
         )
         if user_input:
@@ -155,26 +146,29 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
             for account in self.all_electricity_accounts:
                 if account.account_number == electricity_account_number:
                     return self.async_create_entry(
-                        title=f"CSGELE={electricity_account_number}", data={}
+                        title=f"CSG-ELE-{electricity_account_number}",
+                        data=account.dump(),
                     )
 
         all_entries = self.hass.config_entries.async_entries(DOMAIN)
-        client: CSGWebClient | None = None
+        client: CSGClient | None = None
         for entry in all_entries:
             if entry.data.get(CONF_AUTH_TOKEN):
-                client = CSGWebClient()
-                await self.hass.async_add_executor_job(
-                    client.authenticate,
-                    entry.data[CONF_USERNAME],
-                    entry.data[CONF_PASSWORD],
+                client = CSGClient()
+                client.restore_session(
+                    {
+                        CONF_AUTH_TOKEN: entry.data[CONF_AUTH_TOKEN],
+                        CONF_LOGIN_TYPE: entry.data[CONF_LOGIN_TYPE],
+                    }
                 )
-
-                # client.restore_session(
-                #     {
-                #         CONF_AUTH_TOKEN: entry.data[CONF_AUTH_TOKEN],
-                #         CONF_LOGIN_TYPE: entry.data[CONF_LOGIN_TYPE],
-                #     }
-                # )
+                logged_in = await self.hass.async_add_executor_job(client.verify_login)
+                if not logged_in:
+                    # token expired, re-authenticate
+                    await self.hass.async_add_executor_job(
+                        client.authenticate,
+                        entry.data[CONF_USERNAME],
+                        entry.data[CONF_PASSWORD],
+                    )
                 await self.hass.async_add_executor_job(client.initialize)
                 break
         if not client:
@@ -192,7 +186,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         for account in accounts:
             selections[
                 account.account_number
-            ] = f"{account.account_number} {account.user_name_redacted} {account.address_redacted}"
+            ] = f"{account.account_number} {account.user_name} {account.address}"
 
         schema = vol.Schema(
             {
