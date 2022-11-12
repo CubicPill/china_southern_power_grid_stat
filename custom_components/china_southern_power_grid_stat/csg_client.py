@@ -80,9 +80,36 @@ VERIFICATION_CODE_TYPE_LOGIN = "1"
 # https://95598.csg.cn/js/chunk-49c87982.1.6.177.1667607288138.js
 RESP_STA_QR_TIMEOUT = "00010001"
 
+# from packet capture
+RESP_STA_LOGIN_WRONG_CREDENTIAL = "00010002"
+
 
 class CSGAPIError(Exception):
     """Generic API errors"""
+
+    def __init__(self, sta: str, msg: str) -> None:
+        """sta: status code, msg: message"""
+        Exception.__init__(self)
+        self.sta = sta
+        self.msg = msg
+
+    def __str__(self):
+        return f"<CSGAPIError sta={self.sta} message={self.msg}>"
+
+
+class CSGHTTPError(Exception):
+    """Unexpected HTTP status code (!=200)"""
+
+    def __init__(self, code: int) -> None:
+        Exception.__init__(self)
+        self.status_code = code
+
+    def __str__(self) -> str:
+        return f"<CSGHTTPError code={self.status_code}>"
+
+
+class InvalidCredentials(Exception):
+    """Wrong username+password combination (RESP_STA_LOGIN_WRONG_CREDENTIAL)"""
 
 
 class NotLoggedIn(Exception):
@@ -141,7 +168,7 @@ class CSGElectricityAccount:
         metering_point_id: str,
         address: str,
         user_name: str,
-    ):
+    ) -> None:
         # the parameters are independent for each electricity account
 
         # the 16-digit billing number, as a unique identifier, not used in api for now
@@ -156,8 +183,8 @@ class CSGElectricityAccount:
         self.metering_point_id = metering_point_id
 
         # for frontend display only
-        self.address_redacted = address
-        self.user_name_redacted = user_name
+        self.address = address
+        self.user_name = user_name
 
     def dump(self) -> dict[str, str]:
         """serialize this object"""
@@ -166,8 +193,8 @@ class CSGElectricityAccount:
             "area_code": self.area_code,
             "ele_customer_id": self.ele_customer_id,
             "metering_point_id": self.metering_point_id,
-            "address_redacted": self.address_redacted,
-            "user_name_redacted": self.user_name_redacted,
+            "address": self.address,
+            "user_name": self.user_name,
         }
 
     def load(self, data: dict):
@@ -177,8 +204,8 @@ class CSGElectricityAccount:
             "area_code",
             "ele_customer_id",
             "metering_point_id",
-            "address_redacted",
-            "user_name_redacted",
+            "address",
+            "user_name",
         ):
             if k not in data:
                 raise ValueError(f"Missing key {k}")
@@ -193,7 +220,7 @@ class CSGElectricityAccount:
         return str(self._area_code.value)
 
 
-class CSGWebClient:
+class CSGClient:
     """
     Implementation of APIs from CSG iOS app interface.
     Parameters and consts are from web app js, however, these interfaces are virtually the same
@@ -257,7 +284,7 @@ class CSGWebClient:
                 _LOGGER.error(
                     "API call %s returned status code %d", path, response.status_code
                 )
-                raise CSGAPIError(f"api call returned http {response.status_code}")
+                raise CSGHTTPError(response.status_code)
             response_data = response.json()
             _LOGGER.debug("_make_request: response: %s", json.dumps(response_data))
 
@@ -275,9 +302,7 @@ class CSGWebClient:
         )
         if response_data["sta"] == RESP_STA_NO_LOGIN:
             raise NotLoggedIn()
-        raise CSGAPIError(
-            f"Error {response_data['sta']}, message: {response_data['message']}"
-        )
+        raise CSGAPIError(response_data["sta"], response_data["message"])
 
     # end internal utility functions
 
@@ -329,6 +354,8 @@ class CSGWebClient:
         )
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_header["x-auth-token"]
+        if resp_data["sta"] == RESP_STA_LOGIN_WRONG_CREDENTIAL:
+            raise InvalidCredentials
         self._handle_unsuccessful_response(resp_data)
 
     def api_query_authentication_result(self) -> dict:
@@ -464,7 +491,6 @@ class CSGWebClient:
         for k in ("auth_token", "login_type"):
             if not data.get(k):
                 raise ValueError(f"missing parameter: {k}")
-        # self._session.cookies.clear()
         self.set_authentication_params(
             auth_token=data["auth_token"], login_type=LoginType(data["login_type"])
         )
@@ -479,13 +505,6 @@ class CSGWebClient:
     def set_authentication_params(self, auth_token: str, login_type: LoginType):
         """Set self.auth_token and client generated cookies"""
         self.auth_token = auth_token
-        # self._session.cookies.update(
-        #     {
-        #         "token": auth_token,
-        #         "is-login": "true",
-        #         SESSION_KEY_LOGIN_TYPE: login_type.value,
-        #     }
-        # )
 
     def authenticate(self, phone_no: str, password: str):
         """
