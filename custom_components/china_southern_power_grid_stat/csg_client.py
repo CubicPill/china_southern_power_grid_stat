@@ -479,6 +479,15 @@ class CSGClient:
             return resp_data["data"]
         self._handle_unsuccessful_response(resp_data)
 
+    def api_logout(self, logon_chan: str, cred_type) -> None:
+        """logout"""
+        path = "center/logout"
+        payload = {"logonChan": logon_chan, "credType": cred_type}
+        _, resp_data = self._make_request(path, payload)
+        if resp_data["sta"] == RESP_STA_SUCCESS:
+            return resp_data["data"]
+        self._handle_unsuccessful_response(resp_data)
+
     # end raw api functions
 
     # begin utility functions
@@ -526,6 +535,13 @@ class CSGClient:
         except NotLoggedIn:
             return False
         return True
+
+    def logout(self):
+        """Logout and reset identifier, token etc."""
+        self.api_logout(LOGON_CHANNEL_HANDHELD_HALL, self.login_type.value)
+        self.auth_token = ""
+        self.login_type = LoginType.LOGIN_TYPE_PWD
+        self.customer_number = ""
 
     # end utility functions
 
