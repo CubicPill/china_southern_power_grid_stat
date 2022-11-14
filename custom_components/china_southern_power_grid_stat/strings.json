@@ -24,7 +24,9 @@
       "init": {
         "title": "选择操作",
         "data": {
-          "add_account": "添加已绑定的缴费号"
+          "add_account": "添加已绑定的缴费号",
+          "del_account": "移除缴费号实体",
+          "settings": "参数设置"
         }
       },
       "select_account": {

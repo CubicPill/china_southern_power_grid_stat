@@ -18,8 +18,9 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from requests import RequestException
 
-from .const import CONF_AUTH_TOKEN, CONF_LOGIN_TYPE, DOMAIN
-from .csg_client import (CSGClient, CSGElectricityAccount, InvalidCredentials)
+from .const import (CONF_ACCOUNTS, CONF_AUTH_TOKEN, CONF_LOGIN_TYPE, CONF_SETTINGS, CONF_UPDATE_INTERVAL,
+                    DEFAULT_UPDATE_INTERVAL, DOMAIN, STEP_ADD_ACCOUNT, STEP_DELETE_ACCOUNT, STEP_SETTINGS)
+from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,6 +100,8 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_PASSWORD: user_input[CONF_PASSWORD],
                     CONF_AUTH_TOKEN: session_data[CONF_AUTH_TOKEN],
                     CONF_LOGIN_TYPE: session_data[CONF_LOGIN_TYPE],
+                    CONF_ACCOUNTS: {},
+                    CONF_SETTINGS: {CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL},
                 },
             )
 
@@ -121,13 +124,21 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required("action", default="add_account"): vol.In(
-                    {"add_account": "Add account"}
+                    [
+                        STEP_ADD_ACCOUNT,
+                        STEP_DELETE_ACCOUNT,
+                        STEP_SETTINGS,
+                    ]
                 ),
             }
         )
-        if user_input is not None:
-            return await self.async_step_select_account()
-
+        if user_input:
+            if user_input["action"] == STEP_ADD_ACCOUNT:
+                return await self.async_step_select_account()
+            if user_input["action"] == STEP_DELETE_ACCOUNT:
+                return await self.async_step_delete_account()
+            if user_input["action"] == STEP_SETTINGS:
+                return await self.async_step_settings()
         return self.async_show_form(step_id="init", data_schema=schema)
 
     async def async_step_select_account(
@@ -145,9 +156,17 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
             electricity_account_number = user_input["account_number"]
             for account in self.all_electricity_accounts:
                 if account.account_number == electricity_account_number:
+                    # store the account config in main entry instead of creating new entries
+                    new_data = self.config_entry.data.copy()
+                    new_data[CONF_ACCOUNTS][electricity_account_number] = account.dump()
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        data=new_data,
+                    )
+                    # no separate entry created
                     return self.async_create_entry(
-                        title=f"CSG-ELE-{electricity_account_number}",
-                        data=account.dump(),
+                        title="",
+                        data={},
                     )
 
         all_entries = self.hass.config_entries.async_entries(DOMAIN)
@@ -190,15 +209,24 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required("account_number", default="add_account"): vol.In(
-                    selections
-                ),
+                vol.Required("account_number"): vol.In(selections),
             }
         )
         return self.async_show_form(
             step_id="select_account",
             data_schema=schema,
         )
+
+    async def async_step_delete_account(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        raise NotImplementedError
+
+    async def async_step_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+
+        raise NotImplementedError
 
 
 class CannotConnect(HomeAssistantError):
