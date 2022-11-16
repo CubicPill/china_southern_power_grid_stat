@@ -1,9 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Implementations of CSG's Web API
 this library is synchronous - since the updates are not frequent (12h+)
 and each update only contains a few requests
 """
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import datetime
@@ -163,12 +163,12 @@ class CSGElectricityAccount:
 
     def __init__(
         self,
-        account_number: str,
-        area_code: AreaCode,
-        ele_customer_id: str,
-        metering_point_id: str,
-        address: str,
-        user_name: str,
+        account_number: str | None = None,
+        area_code: AreaCode | None = None,
+        ele_customer_id: str | None = None,
+        metering_point_id: str | None = None,
+        address: str | None = None,
+        user_name: str | None = None,
     ) -> None:
         # the parameters are independent for each electricity account
 
