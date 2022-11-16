@@ -18,9 +18,20 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from requests import RequestException
 
-from .const import (CONF_ACCOUNTS, CONF_AUTH_TOKEN, CONF_LOGIN_TYPE, CONF_SETTINGS, CONF_UPDATE_INTERVAL,
-                    DEFAULT_UPDATE_INTERVAL, DOMAIN, STEP_ADD_ACCOUNT, STEP_DELETE_ACCOUNT, STEP_SETTINGS)
-from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
+from csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
+from .const import (
+    CONF_ACCOUNTS,
+    CONF_AUTH_TOKEN,
+    CONF_LOGIN_TYPE,
+    CONF_SETTINGS,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    STEP_ADD_ACCOUNT,
+    STEP_DELETE_ACCOUNT,
+    STEP_SETTINGS,
+    VALUE_CSG_LOGIN_TYPE_PWD,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,7 +110,6 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_USERNAME: user_input[CONF_USERNAME],
                     CONF_PASSWORD: user_input[CONF_PASSWORD],
                     CONF_AUTH_TOKEN: session_data[CONF_AUTH_TOKEN],
-                    CONF_LOGIN_TYPE: session_data[CONF_LOGIN_TYPE],
                     CONF_ACCOUNTS: {},
                     CONF_SETTINGS: {CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL},
                 },
@@ -177,7 +187,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                 client.restore_session(
                     {
                         CONF_AUTH_TOKEN: entry.data[CONF_AUTH_TOKEN],
-                        CONF_LOGIN_TYPE: entry.data[CONF_LOGIN_TYPE],
+                        CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
                     }
                 )
                 logged_in = await self.hass.async_add_executor_job(client.verify_login)

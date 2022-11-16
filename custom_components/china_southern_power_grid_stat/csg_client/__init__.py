@@ -3,6 +3,7 @@ Implementations of CSG's Web API
 this library is synchronous - since the updates are not frequent (12h+)
 and each update only contains a few requests
 """
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import datetime

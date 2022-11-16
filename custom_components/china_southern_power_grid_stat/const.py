@@ -12,4 +12,5 @@ CONF_SETTINGS = "settings"
 STEP_SETTINGS = "settings"
 STEP_ADD_ACCOUNT = "add_account"
 STEP_DELETE_ACCOUNT = "delete_account"
+VALUE_CSG_LOGIN_TYPE_PWD = "10"
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=1).seconds
