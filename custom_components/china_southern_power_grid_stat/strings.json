@@ -6,17 +6,17 @@
         "description": "使用手机号和密码登录",
         "data": {
           "username": "手机号",
-          "password": "[%key:common::config_flow::data::password%]"
+          "password": "密码"
         }
       }
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
+      "cannot_connect": "网络异常",
+      "invalid_auth": "用户名或密码错误",
+      "unknown": "未知错误"
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "请勿重复添加"
     }
   },
   "options": {

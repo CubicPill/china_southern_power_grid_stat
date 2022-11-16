@@ -18,7 +18,6 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from requests import RequestException
 
-from csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
 from .const import (
     CONF_ACCOUNTS,
     CONF_AUTH_TOKEN,
@@ -32,6 +31,7 @@ from .const import (
     STEP_SETTINGS,
     VALUE_CSG_LOGIN_TYPE_PWD,
 )
+from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
 
 _LOGGER = logging.getLogger(__name__)
 
