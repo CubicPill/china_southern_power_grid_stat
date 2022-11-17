@@ -20,20 +20,27 @@
         }
     },
     "options": {
-        "error": {
-            "no_config": "\u627e\u4e0d\u5230\u8d26\u6237\u914d\u7f6e"
+        "abort": {
+            "all_added": "\u6ca1\u6709\u53ef\u6dfb\u52a0\u5230\u6b64\u96c6\u6210\u7684\u7f34\u8d39\u53f7",
+            "no_account": "\u8d26\u6237\u672a\u7ed1\u5b9a\u7f34\u8d39\u53f7",
+            "no_account_to_delete": "\u6b64\u96c6\u6210\u672a\u7ed1\u5b9a\u7f34\u8d39\u53f7"
         },
         "step": {
+            "add_account": {
+                "title": "\u9009\u62e9\u7f34\u8d39\u53f7"
+            },
             "init": {
-                "data": {
-                    "add_account": "\u6dfb\u52a0\u5df2\u7ed1\u5b9a\u7684\u7f34\u8d39\u53f7",
-                    "del_account": "\u79fb\u9664\u7f34\u8d39\u53f7\u5b9e\u4f53",
-                    "settings": "\u53c2\u6570\u8bbe\u7f6e"
-                },
                 "title": "\u9009\u62e9\u64cd\u4f5c"
             },
-            "select_account": {
-                "title": "\u9009\u62e9\u7f34\u8d39\u53f7"
+            "remove_account": {
+                "title": "\u79fb\u9664\u7f34\u8d39\u53f7"
+            },
+            "settings": {
+                "data": {
+                    "update_interval": "\u66f4\u65b0\u95f4\u9694\uff08\u79d2\uff09",
+                    "update_timeout": "\u8bf7\u6c42\u8d85\u65f6\uff08\u79d2\uff09"
+                },
+                "title": "\u53c2\u6570\u8bbe\u7f6e"
             }
         }
     }

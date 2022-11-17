@@ -22,19 +22,26 @@
   "options": {
     "step": {
       "init": {
-        "title": "选择操作",
-        "data": {
-          "add_account": "添加已绑定的缴费号",
-          "del_account": "移除缴费号实体",
-          "settings": "参数设置"
-        }
+        "title": "选择操作"
       },
-      "select_account": {
+      "add_account": {
         "title": "选择缴费号"
+      },
+      "remove_account": {
+        "title": "移除缴费号"
+      },
+      "settings": {
+        "title": "参数设置",
+        "data": {
+          "update_interval": "更新间隔（秒）",
+          "update_timeout": "请求超时（秒）"
+        }
       }
     },
-    "error": {
-      "no_config": "找不到账户配置"
+    "abort": {
+      "no_account": "账户未绑定缴费号",
+      "all_added": "没有可添加到此集成的缴费号",
+      "no_account_to_delete": "此集成未绑定缴费号"
     }
   }
 }
