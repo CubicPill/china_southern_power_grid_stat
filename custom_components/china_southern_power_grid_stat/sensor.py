@@ -129,10 +129,6 @@ class CSGBaseSensor(
         self._extra_state_attributes_key = extra_state_attributes_key
 
     @property
-    def csg_account_number(self) -> str:
-        return self._account_number
-
-    @property
     def unique_id(self) -> str | None:
         return f"{DOMAIN}.{self._account_number}.{self._entity_suffix}"
 
@@ -149,7 +145,7 @@ class CSGBaseSensor(
         """Return the device info."""
         return DeviceInfo(
             identifiers={(DOMAIN, self._account_number)},
-            name=f"CSG-{self._account_number}",
+            name=f"CSGAccount-{self._account_number}",
             manufacturer="CSG",
             model="CSG Virtual Electricity Meter",
         )

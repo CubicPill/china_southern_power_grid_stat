@@ -16,15 +16,39 @@
 
 - 当前余额和欠费
 - 本年度总用电量和总电费（非实时，更新到上个月）
-- 本年度内每月用电量和电费（非实时，更新到上个月）
-- 当月内每日用电量（非实时，有2天左右的延迟）
+- 本年度内每月用电量和电费（非实时，更新到上个月，需要自行创建实体）
+- 当月累计用电量（非实时，有2天左右的延迟）
+- 当月内每日用电量（非实时，有2天左右的延迟，需要自行创建实体）
 
 ❌**不支持**阶梯电费设置和电费计算（本插件只进行数据抓取和转换，不进行任何计算），暂时也没有支持计划，如有需求，建议单独创建对应的电价实体。
 
 ## 使用方法
 
-使用[HACS](https://hacs.xyz/)搜索 "China Southern Power Grid Statistics"
-安装或[手动下载安装](https://github.com/CubicPill/china_southern_power_grid_stat)
+使用[HACS](https://hacs.xyz/)添加 Custom repositories 或[手动下载安装](https://github.com/CubicPill/china_southern_power_grid_stat/releases)
+
+使用手机号和密码登陆
+
+![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_login.png)
+
+配置界面
+
+![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_add_account.png)
+
+添加缴费号
+
+![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_select_account.png)
+
+传感器列表
+
+![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/sensors.png)
+
+传感器额外参数（每月用量、每日用量）
+
+![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/sensor_attr.png)
+
+参数设置
+
+![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_params.png)
 
 ## 一些技术细节
 
@@ -65,7 +89,7 @@
 
 ### API 实现库
 
-本项目代码中的[`csg_client.py`](https://github.com/CubicPill/china_southern_power_grid_stat/blob/master/custom_components/china_southern_power_grid_stat/csg_client.py)
+本项目代码中的[`csg_client/__init__.py`](https://github.com/CubicPill/china_southern_power_grid_stat/blob/master/custom_components/china_southern_power_grid_stat/csg_client/__init__.py)
 是对南网在线API的实现，可以独立于此项目单独使用。
 
 样例代码如下：
@@ -144,12 +168,6 @@ print(f"Month total usage: {month_daily['month_total_kwh']} kWh")
 for d in month_daily["by_day"]:
     print(f"{d['date']} {d['kwh']} kWh")
 ```
-
-## 更新日志
-
-### 2022.11.12 `1.0.0-beta`
-
-- 第一版集成发布
 
 ## 代码和功能设计参考
 

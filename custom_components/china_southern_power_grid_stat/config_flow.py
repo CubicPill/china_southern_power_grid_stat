@@ -281,9 +281,9 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
 
         entities_removed = []
         for unique_id, entity_id in all_entities.items():
-            _, account_no, suffix = unique_id.split(".")
+            _, account_no, _ = unique_id.split(".")
             if account_no == account_num_to_remove:
-                entity_reg.async_remove(all_entities[unique_id])
+                entity_reg.async_remove(entity_id)
                 entities_removed.append(unique_id)
         if entities_removed:
             _LOGGER.info("Removed entities: %s", entities_removed)
