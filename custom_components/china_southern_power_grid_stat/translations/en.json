@@ -1,7 +1,7 @@
 {
     "config": {
         "abort": {
-            "already_configured": "\u8bf7\u52ff\u91cd\u590d\u6dfb\u52a0"
+            "already_configured": "\u8d26\u53f7\u5df2\u6dfb\u52a0\uff0c\u8bf7\u52ff\u91cd\u590d\u6dfb\u52a0"
         },
         "error": {
             "cannot_connect": "\u7f51\u7edc\u5f02\u5e38",

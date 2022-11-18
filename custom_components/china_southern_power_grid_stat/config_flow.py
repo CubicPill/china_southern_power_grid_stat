@@ -59,6 +59,7 @@ def authenticate_csg(username: str, password: str) -> CSGClient:
     try:
         client.authenticate(username, password)
     except InvalidCredentials as exc:
+        _LOGGER.error("Authentication failed: %s", exc)
         raise InvalidAuth from exc
     except RequestException as exc:
         raise CannotConnect from exc
@@ -182,6 +183,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Select one of the electricity accounts from current account"""
         # account_no: f'{account_no} ({name} {addr})'
+        # todo several accounts could bind to the same ele account - need to check
 
         if user_input:
             account_num_to_add = user_input[CONF_ACCOUNT_NUMBER]

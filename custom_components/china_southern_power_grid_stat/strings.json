@@ -16,7 +16,7 @@
       "unknown": "未知错误"
     },
     "abort": {
-      "already_configured": "请勿重复添加"
+      "already_configured": "账号已添加，请勿重复添加"
     }
   },
   "options": {
