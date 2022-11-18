@@ -13,7 +13,6 @@ import random
 import time
 from base64 import b64decode, b64encode
 from copy import copy
-from enum import Enum
 from hashlib import md5
 from typing import Any
 
@@ -21,68 +20,9 @@ import requests
 from Crypto.Cipher import AES, PKCS1_v1_5
 from Crypto.PublicKey import RSA
 
+from .const import *
+
 _LOGGER = logging.getLogger(__name__)
-
-# BASE_PATH_WEB = "https://95598.csg.cn/ucs/ma/wt/"
-BASE_PATH_APP = "https://95598.csg.cn/ucs/ma/zt/"
-
-# https://95598.csg.cn/js/app.1.6.177.1667607288138.js
-PARAM_KEY = "cOdHFNHUNkZrjNaN".encode("utf8")
-PARAM_IV = "oMChoRLZnTivcQyR".encode("utf8")
-LOGON_CHANNEL_ONLINE_HALL = "3"  # web
-LOGON_CHANNEL_HANDHELD_HALL = "4"  # app
-RESP_STA_SUCCESS = "00"
-RESP_STA_EMPTY_PARAMETER = "01"
-RESP_STA_SYSTEM_ERROR = "02"
-RESP_STA_NO_LOGIN = "04"
-SESSION_KEY_LOGIN_TYPE = "10"
-
-
-class LoginType(Enum):
-    """Login type from JS"""
-
-    LOGIN_TYPE_SMS = "11"
-    LOGIN_TYPE_PWD = "10"
-    LOGIN_TYPE_WX_QR = "20"
-    LOGIN_TYPE_ALI_QR = "21"
-    LOGIN_TYPE_CSG_QR = "30"
-
-
-class AreaCode(Enum):
-    """Area codes"""
-
-    GUANGZHOU = "080000"
-    SHENZHEN = "090000"
-    GUANGDONG = "030000"  # Rest of Guangdong
-    GUANGXI = "040000"
-    YUNNAN = "050000"
-    GUIZHOU = "060000"
-    HAINAN = "070000"
-
-
-AREACODE_FALLBACK = AreaCode.GUANGDONG.value
-
-# https://95598.csg.cn/js/chunk-31aec193.1.6.177.1667607288138.js
-CREDENTIAL_PUBKEY = (
-    "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQD1RJE6GBKJlFQvTU6g0ws9R"
-    "+qXFccKl4i1Rf4KVR8Rh3XtlBtvBxEyTxnVT294RVvYz6THzHGQwREnlgdkjZyGBf7tmV2CgwaHF+ttvupuzOmRVQ"
-    "/difIJtXKM+SM0aCOqBk0fFaLiHrZlZS4qI2/rBQN8VBoVKfGinVMM+USswwIDAQAB"
-)
-rsa_key = RSA.import_key(b64decode(CREDENTIAL_PUBKEY))
-
-# the value of these login types are the same as the enum above
-# however they're not programmatically linked in the source code
-# use them as seperated parameters for now
-LOGIN_TYPE_PHONE_CODE = "11"
-LOGIN_TYPE_PHONE_PWD = "10"
-SEND_MSG_TYPE_VERIFICATION_CODE = "1"
-VERIFICATION_CODE_TYPE_LOGIN = "1"
-
-# https://95598.csg.cn/js/chunk-49c87982.1.6.177.1667607288138.js
-RESP_STA_QR_TIMEOUT = "00010001"
-
-# from packet capture
-RESP_STA_LOGIN_WRONG_CREDENTIAL = "00010002"
 
 
 class CSGAPIError(Exception):
@@ -109,12 +49,18 @@ class CSGHTTPError(Exception):
         return f"<CSGHTTPError code={self.status_code}>"
 
 
-class InvalidCredentials(Exception):
+class InvalidCredentials(CSGAPIError):
     """Wrong username+password combination (RESP_STA_LOGIN_WRONG_CREDENTIAL)"""
 
+    def __str__(self):
+        return f"<CSGInvalidCredentials sta={self.sta} message={self.msg}>"
 
-class NotLoggedIn(Exception):
+
+class NotLoggedIn(CSGAPIError):
     """Not logged in or login expired (RESP_STA_NO_LOGIN)"""
+
+    def __str__(self):
+        return f"<CSGNotLoggedIn sta={self.sta} message={self.msg}>"
 
 
 class QrCodeExpired(Exception):
@@ -132,6 +78,7 @@ def generate_qr_login_id():
 
 def encrypt_credential(password: str) -> str:
     """Use RSA+pubkey to encrypt password"""
+    rsa_key = RSA.import_key(b64decode(CREDENTIAL_PUBKEY))
     credential_cipher = PKCS1_v1_5.new(rsa_key)
     encrypted_pwd = credential_cipher.encrypt(password.encode("utf8"))
     return b64encode(encrypted_pwd).decode()
@@ -190,34 +137,34 @@ class CSGElectricityAccount:
     def dump(self) -> dict[str, str]:
         """serialize this object"""
         return {
-            "account_number": self.account_number,
-            "area_code": self.area_code,
-            "ele_customer_id": self.ele_customer_id,
-            "metering_point_id": self.metering_point_id,
-            "address": self.address,
-            "user_name": self.user_name,
+            ATTR_ACCOUNT_NUMBER: self.account_number,
+            ATTR_AREA_CODE: self.area_code,
+            ATTR_ELE_CUSTOMER_ID: self.ele_customer_id,
+            ATTR_METERING_POINT_ID: self.metering_point_id,
+            ATTR_ADDRESS: self.address,
+            ATTR_USER_NAME: self.user_name,
         }
 
     @staticmethod
     def load(data: dict) -> CSGElectricityAccount:
         """deserialize this object"""
         for k in (
-            "account_number",
-            "area_code",
-            "ele_customer_id",
-            "metering_point_id",
-            "address",
-            "user_name",
+            ATTR_ACCOUNT_NUMBER,
+            ATTR_AREA_CODE,
+            ATTR_ELE_CUSTOMER_ID,
+            ATTR_METERING_POINT_ID,
+            ATTR_ADDRESS,
+            ATTR_USER_NAME,
         ):
             if k not in data:
                 raise ValueError(f"Missing key {k}")
         account = CSGElectricityAccount(
-            account_number=data["account_number"],
-            area_code=AreaCode(data["area_code"]),
-            ele_customer_id=data["ele_customer_id"],
-            metering_point_id=data["metering_point_id"],
-            address=data["address"],
-            user_name=data["user_name"],
+            account_number=data[ATTR_ACCOUNT_NUMBER],
+            area_code=AreaCode(data[ATTR_AREA_CODE]),
+            ele_customer_id=data[ATTR_ELE_CUSTOMER_ID],
+            metering_point_id=data[ATTR_METERING_POINT_ID],
+            address=data[ATTR_ADDRESS],
+            user_name=data[ATTR_USER_NAME],
         )
         return account
 
@@ -287,8 +234,8 @@ class CSGClient:
             for _k, _v in custom_headers.items():
                 headers[_k] = _v
         if with_auth:
-            headers["x-auth-token"] = self.auth_token
-            headers["custNumber"] = self.customer_number
+            headers[HEADER_X_AUTH_TOKEN] = self.auth_token
+            headers[HEADER_CUST_NUMBER] = self.customer_number
         if method == "POST":
             response = self._session.post(url, json=payload, headers=headers)
             if response.status_code != 200:
@@ -312,7 +259,7 @@ class CSGClient:
             response_data,
         )
         if response_data["sta"] == RESP_STA_NO_LOGIN:
-            raise NotLoggedIn()
+            raise NotLoggedIn(response_data["sta"], response_data["message"])
         raise CSGAPIError(response_data["sta"], response_data["message"])
 
     # end internal utility functions
@@ -366,10 +313,10 @@ class CSGClient:
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_header["x-auth-token"]
         if resp_data["sta"] == RESP_STA_LOGIN_WRONG_CREDENTIAL:
-            raise InvalidCredentials
+            raise InvalidCredentials(resp_data["sta"], resp_data["message"])
         self._handle_unsuccessful_response(resp_data)
 
-    def api_query_authentication_result(self) -> dict:
+    def api_query_authentication_result(self) -> dict[str, Any]:
         """Contains custNumber, used to verify login"""
         path = "user/queryAuthenticationResult"
         payload = None
@@ -378,7 +325,7 @@ class CSGClient:
             return resp_data["data"]
         self._handle_unsuccessful_response(resp_data)
 
-    def api_get_user_info(self) -> dict:
+    def api_get_user_info(self) -> dict[str, Any]:
         """Get account info"""
         path = "user/getUserInfo"
         payload = None
@@ -387,7 +334,7 @@ class CSGClient:
             return resp_data["data"]
         self._handle_unsuccessful_response(resp_data)
 
-    def api_get_all_linked_electricity_accounts(self) -> list:
+    def api_get_all_linked_electricity_accounts(self) -> list[dict[str, Any]]:
         """List all linked electricity accounts under this account"""
         path = "eleCustNumber/queryBindEleUsers"
         _, resp_data = self._make_request(path, {})
@@ -503,25 +450,26 @@ class CSGClient:
 
     # begin utility functions
     @staticmethod
-    def load(data: dict[str:str]) -> CSGClient:
+    def load(data: dict[str, str]) -> CSGClient:
         """
         Restore the session info to client object
         The validity of the session won't be checked
         `initialize()` needs to be called for the client to be usable
         """
-        for k in ("auth_token", "login_type"):
+        for k in (ATTR_AUTH_TOKEN, ATTR_LOGIN_TYPE):
             if not data.get(k):
                 raise ValueError(f"missing parameter: {k}")
         client = CSGClient(
-            auth_token=data["auth_token"], login_type=LoginType(data["login_type"])
+            auth_token=data[ATTR_AUTH_TOKEN],
+            login_type=LoginType(data[ATTR_LOGIN_TYPE]),
         )
         return client
 
     def dump(self) -> dict[str, Any]:
         """Dump the session to dict"""
         return {
-            "auth_token": self.auth_token,
-            "login_type": self.login_type.value,
+            ATTR_AUTH_TOKEN: self.auth_token,
+            ATTR_LOGIN_TYPE: self.login_type.value,
         }
 
     def set_authentication_params(self, auth_token: str, login_type: LoginType):
@@ -582,7 +530,9 @@ class CSGClient:
             result.append(account)
         return result
 
-    def get_month_daily_usage_detail(self, account: CSGElectricityAccount) -> dict:
+    def get_month_daily_usage_detail(
+        self, account: CSGElectricityAccount
+    ) -> tuple[float, list[dict[str, str | float]]]:
         """Get daily usage of current month"""
         dt_now = datetime.datetime.now()
         year, month = dt_now.year, dt_now.month
@@ -598,7 +548,7 @@ class CSGClient:
         by_day = []
         for d_data in resp_data["result"]:
             by_day.append({"date": d_data["date"], "kwh": float(d_data["power"])})
-        return {"month_total_kwh": month_total_kwh, "by_day": by_day}
+        return month_total_kwh, by_day
 
     def get_balance_and_arrears(
         self, account: CSGElectricityAccount
@@ -612,7 +562,9 @@ class CSGClient:
         arrears = resp_data[0]["arrears"]
         return float(balance), float(arrears)
 
-    def get_year_month_stats(self, account: CSGElectricityAccount) -> dict:
+    def get_year_month_stats(
+        self, account: CSGElectricityAccount
+    ) -> tuple[float, float, list[dict[str, str | float]]]:
         """Get year total kWh, year total charge, kWh/charge by month in current year"""
         year = datetime.datetime.now().year
         resp_data = self.api_get_fee_analyze_details(
@@ -630,11 +582,7 @@ class CSGClient:
                     "kwh": float(m_data["billingElectricity"]),
                 }
             )
-        return {
-            "year_total_charge": float(total_year_charge),
-            "year_total_kwh": float(total_year_kwh),
-            "by_month": by_month,
-        }
+        return float(total_year_charge), float(total_year_kwh), by_month
 
     def get_yesterday_kwh(self, account: CSGElectricityAccount) -> float:
         """Get power consumption(kwh) of yesterday"""

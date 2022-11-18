@@ -62,7 +62,7 @@ async def async_setup_entry(
 ):
     """Setup sensors from a config entry created in the integrations UI."""
     if not config_entry.data[CONF_ACCOUNTS]:
-        _LOGGER.info("No accounts in config, exit entry setup")
+        _LOGGER.info("No ele accounts in config, exit entry setup")
         return
 
     coordinator = CSGCoordinator(hass, config_entry.entry_id)
@@ -268,16 +268,18 @@ class CSGCoordinator(DataUpdateCoordinator):
             for account_number, account_data in config[CONF_ACCOUNTS].items():
                 account = CSGElectricityAccount.load(account_data)
                 bal, arr = client.get_balance_and_arrears(account)
-                year_month_stats = client.get_year_month_stats(account)
-                month_daily_usage = client.get_month_daily_usage_detail(account)
+                year_charge, year_kwh, year_by_month = client.get_year_month_stats(
+                    account
+                )
+                month_kwh, month_by_day = client.get_month_daily_usage_detail(account)
                 data_ret[account_number] = {
                     SUFFIX_BAL: bal,
                     SUFFIX_ARR: arr,
-                    SUFFIX_YEAR_KWH: year_month_stats["year_total_kwh"],
-                    SUFFIX_YEAR_COST: year_month_stats["year_total_charge"],
-                    ATTR_KEY_YEAR_BY_MONTH: year_month_stats,
-                    SUFFIX_MONTH_KWH: month_daily_usage["month_total_kwh"],
-                    ATTR_KEY_MONTH_BY_DAY: month_daily_usage,
+                    SUFFIX_YEAR_KWH: year_kwh,
+                    SUFFIX_YEAR_COST: year_charge,
+                    ATTR_KEY_YEAR_BY_MONTH: {ATTR_KEY_YEAR_BY_MONTH: year_by_month},
+                    SUFFIX_MONTH_KWH: month_kwh,
+                    ATTR_KEY_MONTH_BY_DAY: {ATTR_KEY_MONTH_BY_DAY: month_by_day},
                 }
             _LOGGER.info("Coordinator %s update done!", config[CONF_USERNAME])
             return data_ret
