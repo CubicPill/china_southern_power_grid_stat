@@ -3,6 +3,7 @@
 # 南方电网电费数据HA集成
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## 支持功能
 
@@ -35,29 +36,30 @@
 
 使用手机号和密码登陆
 
-![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_login.png)
+<img src="https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_login.png" alt="" style="width: 400px;">
 
 配置界面
 
-![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_add_account.png)
+<img src="https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_add_account.png" alt="" style="width: 400px;">
 
 添加缴费号
 
-![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_select_account.png)
+<img src="https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_select_account.png" alt="" style="width: 400px;">
 
 传感器列表
 
-![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/sensors.png)
+<img src="https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/sensors.png" alt="" style="width: 400px;">
 
 传感器额外参数（每月用量、每日用量）
 
-![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/sensor_attr.png)
+<img src="https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/sensor_attr.png" alt="" style="width: 400px;">
 
 参数设置
 
-![](https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_params.png)
+<img src="https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_params.png" alt="" style="width: 400px;">
 
 ### 数据更新策略
+
 由于上月数据和去年数据在生成之后一般不会发生变化，因此对于上月累计用电量、上月每日用电量、上年度累计用电量、上年度每月用电量，数据更新间隔将会与一般更新间隔有所不同。
 具体更新策略如下：
 
