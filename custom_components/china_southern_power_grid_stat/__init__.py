@@ -42,7 +42,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass_data = dict(entry.data)
     # Registers update listener to update config entry when options are updated.
     unsub_update_listener = entry.add_update_listener(update_listener)
-    # Store a reference to the unsubscribe function to cleanup if an entry is unloaded.
+    # Store a reference to the unsubscribe function to clean up if an entry is unloaded.
 
     hass.data[DOMAIN][entry.entry_id] = {"unsub_update_listener": unsub_update_listener}
 

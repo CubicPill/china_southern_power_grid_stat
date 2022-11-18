@@ -1,6 +1,7 @@
 """Sensors for the China Southern Power Grid Statistics integration."""
 from __future__ import annotations
 
+import datetime
 import logging
 from datetime import timedelta
 
@@ -28,8 +29,10 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import (
-    ATTR_KEY_MONTH_BY_DAY,
-    ATTR_KEY_YEAR_BY_MONTH,
+    ATTR_KEY_LAST_MONTH_BY_DAY,
+    ATTR_KEY_LAST_YEAR_BY_MONTH,
+    ATTR_KEY_THIS_MONTH_BY_DAY,
+    ATTR_KEY_THIS_YEAR_BY_MONTH,
     CONF_ACCOUNTS,
     CONF_AUTH_TOKEN,
     CONF_LOGIN_TYPE,
@@ -39,9 +42,13 @@ from .const import (
     DOMAIN,
     SUFFIX_ARR,
     SUFFIX_BAL,
-    SUFFIX_MONTH_KWH,
-    SUFFIX_YEAR_COST,
-    SUFFIX_YEAR_KWH,
+    SUFFIX_LAST_MONTH_KWH,
+    SUFFIX_LAST_YEAR_COST,
+    SUFFIX_LAST_YEAR_KWH,
+    SUFFIX_THIS_MONTH_KWH,
+    SUFFIX_THIS_YEAR_COST,
+    SUFFIX_THIS_YEAR_KWH,
+    SUFFIX_YESTERDAY_KWH,
     VALUE_CSG_LOGIN_TYPE_PWD,
 )
 from .csg_client import (
@@ -69,31 +76,56 @@ async def async_setup_entry(
 
     all_sensors = []
     for account_number, _ in config_entry.data[CONF_ACCOUNTS].items():
-
         sensors = [
             # balance
             CSGCostSensor(coordinator, account_number, SUFFIX_BAL),
             # arrears
             CSGCostSensor(coordinator, account_number, SUFFIX_ARR),
+            # yesterday kwh
+            CSGEnergySensor(
+                coordinator,
+                account_number,
+                SUFFIX_YESTERDAY_KWH,
+            ),
             # this year's total energy, with extra attributes about monthly usage
             CSGEnergySensor(
                 coordinator,
                 account_number,
-                SUFFIX_YEAR_KWH,
-                extra_state_attributes_key=ATTR_KEY_YEAR_BY_MONTH,
+                SUFFIX_THIS_YEAR_KWH,
+                extra_state_attributes_key=ATTR_KEY_THIS_YEAR_BY_MONTH,
             ),
             # this year's total cost
             CSGCostSensor(
                 coordinator,
                 account_number,
-                SUFFIX_YEAR_COST,
+                SUFFIX_THIS_YEAR_COST,
             ),
             # this month's total energy, with extra attributes about daily usage
             CSGEnergySensor(
                 coordinator,
                 account_number,
-                SUFFIX_MONTH_KWH,
-                extra_state_attributes_key=ATTR_KEY_MONTH_BY_DAY,
+                SUFFIX_THIS_MONTH_KWH,
+                extra_state_attributes_key=ATTR_KEY_THIS_MONTH_BY_DAY,
+            ),
+            # last year's total energy, with extra attributes about monthly usage
+            CSGEnergySensor(
+                coordinator,
+                account_number,
+                SUFFIX_LAST_YEAR_KWH,
+                extra_state_attributes_key=ATTR_KEY_LAST_YEAR_BY_MONTH,
+            ),
+            # last year's total cost
+            CSGCostSensor(
+                coordinator,
+                account_number,
+                SUFFIX_LAST_YEAR_COST,
+            ),
+            # last month's total energy, with extra attributes about daily usage
+            CSGEnergySensor(
+                coordinator,
+                account_number,
+                SUFFIX_LAST_MONTH_KWH,
+                extra_state_attributes_key=ATTR_KEY_LAST_MONTH_BY_DAY,
             ),
         ]
 
@@ -238,11 +270,15 @@ class CSGCoordinator(DataUpdateCoordinator):
         )
 
         def csg_fetch_all():
+            """
+            todo stats from last year are unlikely to change during this year,
+            and stats from last month are unlikely to change during this month.
+            these could be cached?
+            """
 
             if not config[CONF_ACCOUNTS]:
                 # no linked ele accounts
                 return {}
-
             # restore session or re-auth
             client = CSGClient.load(
                 {
@@ -265,21 +301,53 @@ class CSGCoordinator(DataUpdateCoordinator):
 
             # fetch data for each account
             data_ret = {}
+            current_dt = datetime.datetime.now()
+            this_year, this_month = current_dt.year, current_dt.month
+            last_year, last_month = this_year - 1, this_month - 1
             for account_number, account_data in config[CONF_ACCOUNTS].items():
                 account = CSGElectricityAccount.load(account_data)
                 bal, arr = client.get_balance_and_arrears(account)
-                year_charge, year_kwh, year_by_month = client.get_year_month_stats(
-                    account
+                yesterday_kwh = client.get_yesterday_kwh(account)
+                (
+                    this_year_cost,
+                    this_year_kwh,
+                    this_year_by_month,
+                ) = client.get_year_month_stats(account, this_year)
+                this_month_kwh, this_month_by_day = client.get_month_daily_usage_detail(
+                    account, (this_year, this_month)
                 )
-                month_kwh, month_by_day = client.get_month_daily_usage_detail(account)
+
+                (
+                    last_year_cost,
+                    last_year_kwh,
+                    last_year_by_month,
+                ) = client.get_year_month_stats(account, last_year)
+                last_month_kwh, last_month_by_day = client.get_month_daily_usage_detail(
+                    account, (this_year, last_month)
+                )
+
                 data_ret[account_number] = {
                     SUFFIX_BAL: bal,
                     SUFFIX_ARR: arr,
-                    SUFFIX_YEAR_KWH: year_kwh,
-                    SUFFIX_YEAR_COST: year_charge,
-                    ATTR_KEY_YEAR_BY_MONTH: {ATTR_KEY_YEAR_BY_MONTH: year_by_month},
-                    SUFFIX_MONTH_KWH: month_kwh,
-                    ATTR_KEY_MONTH_BY_DAY: {ATTR_KEY_MONTH_BY_DAY: month_by_day},
+                    SUFFIX_YESTERDAY_KWH: yesterday_kwh,
+                    SUFFIX_THIS_YEAR_KWH: this_year_kwh,
+                    SUFFIX_THIS_YEAR_COST: this_year_cost,
+                    ATTR_KEY_THIS_YEAR_BY_MONTH: {
+                        ATTR_KEY_THIS_YEAR_BY_MONTH: this_year_by_month
+                    },
+                    SUFFIX_LAST_YEAR_KWH: last_year_kwh,
+                    SUFFIX_LAST_YEAR_COST: last_year_cost,
+                    ATTR_KEY_LAST_YEAR_BY_MONTH: {
+                        ATTR_KEY_LAST_YEAR_BY_MONTH: last_year_by_month
+                    },
+                    SUFFIX_THIS_MONTH_KWH: this_month_kwh,
+                    ATTR_KEY_THIS_MONTH_BY_DAY: {
+                        ATTR_KEY_THIS_MONTH_BY_DAY: this_month_by_day
+                    },
+                    SUFFIX_LAST_MONTH_KWH: last_month_kwh,
+                    ATTR_KEY_LAST_MONTH_BY_DAY: {
+                        ATTR_KEY_LAST_MONTH_BY_DAY: last_month_by_day
+                    },
                 }
             _LOGGER.info("Coordinator %s update done!", config[CONF_USERNAME])
             return data_ret

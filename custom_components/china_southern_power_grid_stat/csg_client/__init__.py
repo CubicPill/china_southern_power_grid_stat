@@ -6,7 +6,6 @@ and each update only contains a few requests
 """
 from __future__ import annotations
 
-import datetime
 import json
 import logging
 import random
@@ -531,11 +530,11 @@ class CSGClient:
         return result
 
     def get_month_daily_usage_detail(
-        self, account: CSGElectricityAccount
+        self, account: CSGElectricityAccount, year_month: tuple[int, int]
     ) -> tuple[float, list[dict[str, str | float]]]:
         """Get daily usage of current month"""
-        dt_now = datetime.datetime.now()
-        year, month = dt_now.year, dt_now.month
+
+        year, month = year_month
 
         resp_data = self.api_query_day_electric_by_m_point(
             year,
@@ -563,10 +562,10 @@ class CSGClient:
         return float(balance), float(arrears)
 
     def get_year_month_stats(
-        self, account: CSGElectricityAccount
+        self, account: CSGElectricityAccount, year
     ) -> tuple[float, float, list[dict[str, str | float]]]:
         """Get year total kWh, year total charge, kWh/charge by month in current year"""
-        year = datetime.datetime.now().year
+
         resp_data = self.api_get_fee_analyze_details(
             year, account.area_code, account.ele_customer_id
         )

@@ -113,6 +113,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(user_input[CONF_USERNAME])
         self._abort_if_unique_id_configured()
 
+        # noinspection PyBroadException
         try:
             session_data = await validate_input(self.hass, user_input)
         except CannotConnect:
@@ -334,10 +335,10 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(CONF_UPDATE_INTERVAL, default=update_interval): vol.All(
-                    int, min=60
+                    int, vol.Range(min=60)
                 ),
                 vol.Required(CONF_UPDATE_TIMEOUT, default=update_timeout): vol.All(
-                    int, min=10
+                    int, vol.Range(min=10)
                 ),
             }
         )
