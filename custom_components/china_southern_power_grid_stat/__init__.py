@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_USERNAME, Platform
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import (
     CONF_AUTH_TOKEN,
     CONF_LOGIN_TYPE,
+    CONF_UPDATED_AT,
+    DATA_KEY_UNSUB_UPDATE_LISTENER,
     DOMAIN,
     VALUE_CSG_LOGIN_TYPE_PWD,
 )
@@ -39,15 +43,43 @@ async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up China Southern Power Grid Statistics from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    hass_data = dict(entry.data)
+
+    # validate session, re-authenticate if needed
+    client = CSGClient.load(
+        {
+            CONF_AUTH_TOKEN: entry.data[CONF_AUTH_TOKEN],
+            CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
+        }
+    )
+    if not await hass.async_add_executor_job(client.verify_login):
+        try:
+            await hass.async_add_executor_job(
+                client.authenticate,
+                entry.data[CONF_USERNAME],
+                entry.data[CONF_PASSWORD],
+            )
+        except InvalidCredentials as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        dumped = client.dump()
+        new_data = entry.data.copy()
+        new_data[CONF_AUTH_TOKEN] = dumped[CONF_AUTH_TOKEN]
+        new_data[CONF_UPDATED_AT] = int(time.time() * 1000)
+        # this will not trigger update listener
+        hass.config_entries.async_update_entry(
+            entry,
+            data=new_data,
+        )
+        _LOGGER.info(
+            "Account login refreshed: %s",
+            entry.data[CONF_USERNAME],
+        )
     # Registers update listener to update config entry when options are updated.
     unsub_update_listener = entry.add_update_listener(update_listener)
     # Store a reference to the unsubscribe function to clean up if an entry is unloaded.
 
-    hass.data[DOMAIN][entry.entry_id] = {"unsub_update_listener": unsub_update_listener}
-
-    hass_data["unsub_update_listener"] = unsub_update_listener
-    hass.data[DOMAIN][entry.entry_id] = hass_data
+    hass.data[DOMAIN][entry.entry_id] = {
+        DATA_KEY_UNSUB_UPDATE_LISTENER: unsub_update_listener
+    }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -56,7 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    hass.data[DOMAIN][entry.entry_id]["unsub_update_listener"]()
+    hass.data[DOMAIN][entry.entry_id][DATA_KEY_UNSUB_UPDATE_LISTENER]()
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)

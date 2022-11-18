@@ -13,7 +13,6 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_PASSWORD,
     CONF_USERNAME,
     ENERGY_KILO_WATT_HOUR,
     STATE_UNAVAILABLE,
@@ -39,7 +38,9 @@ from .const import (
     CONF_SETTINGS,
     CONF_UPDATE_INTERVAL,
     CONF_UPDATE_TIMEOUT,
+    DATA_KEY_LAST_UPDATE_DAY,
     DOMAIN,
+    STATE_UPDATE_UNCHANGED,
     SUFFIX_ARR,
     SUFFIX_BAL,
     SUFFIX_LAST_MONTH_KWH,
@@ -71,7 +72,7 @@ async def async_setup_entry(
     if not config_entry.data[CONF_ACCOUNTS]:
         _LOGGER.info("No ele accounts in config, exit entry setup")
         return
-
+    hass.data[DOMAIN][config_entry.entry_id]["cache"] = {}
     coordinator = CSGCoordinator(hass, config_entry.entry_id)
 
     all_sensors = []
@@ -206,6 +207,9 @@ class CSGBaseSensor(
                 self._account_number,
                 self._entity_suffix,
             )
+        elif new_native_value == STATE_UPDATE_UNCHANGED:
+            # no update for this sensor, skip
+            return
         self._attr_native_value = new_native_value
 
         if self._extra_state_attributes_key:
@@ -270,16 +274,10 @@ class CSGCoordinator(DataUpdateCoordinator):
         )
 
         def csg_fetch_all():
-            """
-            todo stats from last year are unlikely to change during this year,
-            and stats from last month are unlikely to change during this month.
-            these could be cached?
-            """
 
             if not config[CONF_ACCOUNTS]:
                 # no linked ele accounts
                 return {}
-            # restore session or re-auth
             client = CSGClient.load(
                 {
                     CONF_AUTH_TOKEN: config[CONF_AUTH_TOKEN],
@@ -287,44 +285,115 @@ class CSGCoordinator(DataUpdateCoordinator):
                 }
             )
             if not client.verify_login():
-                # expired session
-                client.authenticate(config[CONF_USERNAME], config[CONF_PASSWORD])
-            client.initialize()
+                # expired session, reload the config entry, so it could be re-authed
+                self.hass.config_entries.async_reload(self._config_entry_id)
+                # this won't cause errors since sensors should have been deconstructed
+                return {}
 
-            # save new access token
-            dumped = client.dump()
-            config[CONF_AUTH_TOKEN] = dumped[CONF_AUTH_TOKEN]
-            self.hass.config_entries.async_update_entry(
-                self.hass.config_entries.async_get_entry(self._config_entry_id),
-                data=config,
-            )
+            client.initialize()
 
             # fetch data for each account
             data_ret = {}
             current_dt = datetime.datetime.now()
-            this_year, this_month = current_dt.year, current_dt.month
+            this_year, this_month, this_day = (
+                current_dt.year,
+                current_dt.month,
+                current_dt.day,
+            )
             last_year, last_month = this_year - 1, this_month - 1
+
+            # for last month and last year data, they won't change over a long period of time - so we could use cache
+            #
+            # update policy for last month:
+            # for the first 5 days of a month, update every `update_interval`
+            # for the rest of the time, do not update
+            #
+            # update policy for last year:
+            # for the first 5 days of Jan, update daily at first update
+            # for the rest of the time, do not update
+            #
+            # when integration is reloaded, all updates will be triggered
+            # so user could just reload the integration to refresh the data if needed
+
+            if (
+                self.hass.data[DOMAIN][self._config_entry_id].get(
+                    DATA_KEY_LAST_UPDATE_DAY
+                )
+                is None
+            ):
+                # first update
+                update_last_month = True
+                update_last_year = True
+                _LOGGER.info(
+                    "First update for account %s, getting all past data",
+                    config[CONF_USERNAME],
+                )
+            else:
+                update_last_month = False
+                update_last_year = False
+
+                if this_day <= 5:
+                    update_last_month = True
+
+                if this_month == 1 and this_day <= 5:
+                    if (
+                        self.hass.data[DOMAIN][self._config_entry_id][
+                            DATA_KEY_LAST_UPDATE_DAY
+                        ]
+                        < this_day
+                    ):
+                        update_last_year = True
+
             for account_number, account_data in config[CONF_ACCOUNTS].items():
+
                 account = CSGElectricityAccount.load(account_data)
+
                 bal, arr = client.get_balance_and_arrears(account)
+
                 yesterday_kwh = client.get_yesterday_kwh(account)
+
                 (
                     this_year_cost,
                     this_year_kwh,
                     this_year_by_month,
                 ) = client.get_year_month_stats(account, this_year)
+
                 this_month_kwh, this_month_by_day = client.get_month_daily_usage_detail(
                     account, (this_year, this_month)
                 )
 
-                (
-                    last_year_cost,
-                    last_year_kwh,
-                    last_year_by_month,
-                ) = client.get_year_month_stats(account, last_year)
-                last_month_kwh, last_month_by_day = client.get_month_daily_usage_detail(
-                    account, (this_year, last_month)
-                )
+                if update_last_year:
+                    (
+                        last_year_cost,
+                        last_year_kwh,
+                        last_year_by_month,
+                    ) = client.get_year_month_stats(account, last_year)
+                else:
+                    last_year_cost, last_year_kwh, last_year_by_month = (
+                        STATE_UPDATE_UNCHANGED,
+                        STATE_UPDATE_UNCHANGED,
+                        STATE_UPDATE_UNCHANGED,
+                    )
+                    _LOGGER.info(
+                        "Account %s, skipping getting last year data",
+                        config[CONF_USERNAME],
+                    )
+                if update_last_month:
+                    (
+                        last_month_kwh,
+                        last_month_by_day,
+                    ) = client.get_month_daily_usage_detail(
+                        account, (this_year, last_month)
+                    )
+                else:
+                    last_month_kwh, last_month_by_day = (
+                        STATE_UPDATE_UNCHANGED,
+                        STATE_UPDATE_UNCHANGED,
+                    )
+                    _LOGGER.info(
+                        "Account %s, skipping getting last month data",
+                        config[CONF_USERNAME],
+                    )
 
                 data_ret[account_number] = {
                     SUFFIX_BAL: bal,
@@ -350,6 +419,9 @@ class CSGCoordinator(DataUpdateCoordinator):
                     },
                 }
             _LOGGER.info("Coordinator %s update done!", config[CONF_USERNAME])
+            self.hass.data[DOMAIN][self._config_entry_id][
+                DATA_KEY_LAST_UPDATE_DAY
+            ] = this_day
             return data_ret
 
         try:

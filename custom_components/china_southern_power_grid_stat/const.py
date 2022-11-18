@@ -3,6 +3,10 @@ from datetime import timedelta
 
 DOMAIN = "china_southern_power_grid_stat"
 
+DATA_KEY_UNSUB_UPDATE_LISTENER = "unsub_update_listener"
+STATE_UPDATE_UNCHANGED = "unchanged"
+DATA_KEY_LAST_UPDATE_DAY = "last_update_day"
+
 CONF_ACCOUNT_NUMBER = "account_number"
 CONF_LOGIN_TYPE = "login_type"
 CONF_AUTH_TOKEN = "auth_token"
@@ -30,7 +34,7 @@ ERROR_UNKNOWN = "unknown"
 
 VALUE_CSG_LOGIN_TYPE_PWD = "10"
 
-DEFAULT_UPDATE_INTERVAL = timedelta(hours=1).seconds
+DEFAULT_UPDATE_INTERVAL = timedelta(hours=4).seconds
 DEFAULT_UPDATE_TIMEOUT = 20
 
 SUFFIX_BAL = "balance"
