@@ -68,9 +68,7 @@ async def async_setup_entry(
     coordinator = CSGCoordinator(hass, config_entry.entry_id)
 
     all_sensors = []
-    for account_number, account_data in config_entry.data[CONF_ACCOUNTS].items():
-        account = CSGElectricityAccount()
-        account.load(account_data)
+    for account_number, _ in config_entry.data[CONF_ACCOUNTS].items():
 
         sensors = [
             # balance
@@ -153,7 +151,7 @@ class CSGBaseSensor(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        _LOGGER.info(
+        _LOGGER.debug(
             "Ele account %s, sensor %s, coordinator update triggered",
             self._account_number,
             self._entity_suffix,
@@ -241,14 +239,12 @@ class CSGCoordinator(DataUpdateCoordinator):
 
         def csg_fetch_all():
 
-            # restore session or re-auth
-            client = CSGClient()
-
             if not config[CONF_ACCOUNTS]:
                 # no linked ele accounts
                 return {}
 
-            client.restore_session(
+            # restore session or re-auth
+            client = CSGClient.load(
                 {
                     CONF_AUTH_TOKEN: config[CONF_AUTH_TOKEN],
                     CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
@@ -260,7 +256,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             client.initialize()
 
             # save new access token
-            dumped = client.dump_session()
+            dumped = client.dump()
             config[CONF_AUTH_TOKEN] = dumped[CONF_AUTH_TOKEN]
             self.hass.config_entries.async_update_entry(
                 self.hass.config_entries.async_get_entry(self._config_entry_id),
@@ -270,8 +266,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             # fetch data for each account
             data_ret = {}
             for account_number, account_data in config[CONF_ACCOUNTS].items():
-                account = CSGElectricityAccount()
-                account.load(account_data)
+                account = CSGElectricityAccount.load(account_data)
                 bal, arr = client.get_balance_and_arrears(account)
                 year_month_stats = client.get_year_month_stats(account)
                 month_daily_usage = client.get_month_daily_usage_detail(account)
@@ -284,7 +279,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                     SUFFIX_MONTH_KWH: month_daily_usage["month_total_kwh"],
                     ATTR_KEY_MONTH_BY_DAY: month_daily_usage,
                 }
-            _LOGGER.info("Coordinator update done!")
+            _LOGGER.info("Coordinator %s update done!", config[CONF_USERNAME])
             return data_ret
 
         try:

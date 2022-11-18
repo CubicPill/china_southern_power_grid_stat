@@ -70,8 +70,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     # logout
     def client_logout():
-        client = CSGClient()
-        client.restore_session(
+        client = CSGClient.load(
             {
                 CONF_AUTH_TOKEN: entry.data[CONF_AUTH_TOKEN],
                 CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,

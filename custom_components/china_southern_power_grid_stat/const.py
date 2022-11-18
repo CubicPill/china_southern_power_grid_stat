@@ -11,10 +11,22 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_UPDATE_TIMEOUT = "update_timeout"
 CONF_SETTINGS = "settings"
 CONF_UPDATED_AT = "updated_at"
+CONF_ACTION = "action"
 
+STEP_USER = "user"
+STEP_INIT = "init"
 STEP_SETTINGS = "settings"
 STEP_ADD_ACCOUNT = "add_account"
-STEP_DELETE_ACCOUNT = "delete_account"
+STEP_REMOVE_ACCOUNT = "remove_account"
+
+ABORT_NO_ACCOUNT = "no_account"
+ABORT_ALL_ADDED = "all_added"
+ABORT_NO_ACCOUNT_TO_DELETE = "no_account_to_delete"
+
+CONF_GENERAL_ERROR = "base"
+ERROR_CANNOT_CONNECT = "cannot_connect"
+ERROR_INVALID_AUTH = "invalid_auth"
+ERROR_UNKNOWN = "unknown"
 
 VALUE_CSG_LOGIN_TYPE_PWD = "10"
 

@@ -198,7 +198,8 @@ class CSGElectricityAccount:
             "user_name": self.user_name,
         }
 
-    def load(self, data: dict):
+    @staticmethod
+    def load(data: dict) -> CSGElectricityAccount:
         """deserialize this object"""
         for k in (
             "account_number",
@@ -210,10 +211,15 @@ class CSGElectricityAccount:
         ):
             if k not in data:
                 raise ValueError(f"Missing key {k}")
-            if k == "area_code":
-                self._area_code = AreaCode(data[k])
-            else:
-                setattr(self, k, data[k])
+        account = CSGElectricityAccount(
+            account_number=data["account_number"],
+            area_code=AreaCode(data["area_code"]),
+            ele_customer_id=data["ele_customer_id"],
+            metering_point_id=data["metering_point_id"],
+            address=data["address"],
+            user_name=data["user_name"],
+        )
+        return account
 
     @property
     def area_code(self) -> str:
@@ -235,7 +241,11 @@ class CSGClient:
     Use the account objects to call the utility functions and wrapped api functions
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        auth_token: str | None = None,
+        login_type: LoginType | None = None,
+    ) -> None:
         self._session: requests.Session = requests.Session()
         self._common_headers = {
             "Host": "95598.csg.cn",
@@ -251,11 +261,11 @@ class CSGClient:
             "Accept-Language": "zh-CN,cn;q=0.9",
         }
 
-        self.auth_token: str = ""
-        self.login_type: LoginType = LoginType.LOGIN_TYPE_PWD
+        self.auth_token = auth_token or ""
+        self.login_type = login_type or LoginType.LOGIN_TYPE_PWD
 
-        # identifier
-        self.customer_number: str = ""
+        # identifier, need to be set in initialize()
+        self.customer_number = ""
 
     # begin internal utility functions
     def _make_request(
@@ -492,7 +502,8 @@ class CSGClient:
     # end raw api functions
 
     # begin utility functions
-    def restore_session(self, data: dict[str:str]):
+    @staticmethod
+    def load(data: dict[str:str]) -> CSGClient:
         """
         Restore the session info to client object
         The validity of the session won't be checked
@@ -501,11 +512,12 @@ class CSGClient:
         for k in ("auth_token", "login_type"):
             if not data.get(k):
                 raise ValueError(f"missing parameter: {k}")
-        self.set_authentication_params(
+        client = CSGClient(
             auth_token=data["auth_token"], login_type=LoginType(data["login_type"])
         )
+        return client
 
-    def dump_session(self) -> dict[str, Any]:
+    def dump(self) -> dict[str, Any]:
         """Dump the session to dict"""
         return {
             "auth_token": self.auth_token,
@@ -515,6 +527,7 @@ class CSGClient:
     def set_authentication_params(self, auth_token: str, login_type: LoginType):
         """Set self.auth_token and client generated cookies"""
         self.auth_token = auth_token
+        self.login_type = login_type
 
     def authenticate(self, phone_no: str, password: str):
         """

@@ -22,8 +22,14 @@ from homeassistant.helpers import device_registry, entity_registry
 from requests import RequestException
 
 from .const import (
+    ABORT_ALL_ADDED,
+    ABORT_NO_ACCOUNT,
+    ABORT_NO_ACCOUNT_TO_DELETE,
     CONF_ACCOUNTS,
+    CONF_ACCOUNT_NUMBER,
+    CONF_ACTION,
     CONF_AUTH_TOKEN,
+    CONF_GENERAL_ERROR,
     CONF_LOGIN_TYPE,
     CONF_SETTINGS,
     CONF_UPDATED_AT,
@@ -32,9 +38,14 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_UPDATE_TIMEOUT,
     DOMAIN,
+    ERROR_CANNOT_CONNECT,
+    ERROR_INVALID_AUTH,
+    ERROR_UNKNOWN,
     STEP_ADD_ACCOUNT,
-    STEP_DELETE_ACCOUNT,
+    STEP_INIT,
+    STEP_REMOVE_ACCOUNT,
     STEP_SETTINGS,
+    STEP_USER,
     VALUE_CSG_LOGIN_TYPE_PWD,
 )
 from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
@@ -63,7 +74,7 @@ async def validate_input(
     client = await hass.async_add_executor_job(
         authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD]
     )
-    return client.dump_session()
+    return client.dump()
 
 
 class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -94,7 +105,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
         if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=schema)
+            return self.async_show_form(step_id=STEP_USER, data_schema=schema)
 
         errors = {}
 
@@ -104,12 +115,12 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             session_data = await validate_input(self.hass, user_input)
         except CannotConnect:
-            errors["base"] = "cannot_connect"
+            errors[CONF_GENERAL_ERROR] = ERROR_CANNOT_CONNECT
         except InvalidAuth:
-            errors["base"] = "invalid_auth"
+            errors[CONF_GENERAL_ERROR] = ERROR_INVALID_AUTH
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
+            errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
         else:
 
             _LOGGER.info("Adding csg account %s", user_input[CONF_USERNAME])
@@ -128,7 +139,9 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 },
             )
 
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id=STEP_USER, data_schema=schema, errors=errors
+        )
 
 
 class CSGOptionsFlowHandler(config_entries.OptionsFlow):
@@ -146,23 +159,23 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required("action", default="add_account"): vol.In(
+                vol.Required(CONF_ACTION, default=STEP_ADD_ACCOUNT): vol.In(
                     {
                         STEP_ADD_ACCOUNT: "添加已绑定的缴费号",
-                        STEP_DELETE_ACCOUNT: "移除缴费号实体",
+                        STEP_REMOVE_ACCOUNT: "移除缴费号实体",
                         STEP_SETTINGS: "参数设置",
                     }
                 ),
             }
         )
         if user_input:
-            if user_input["action"] == STEP_ADD_ACCOUNT:
+            if user_input[CONF_ACTION] == STEP_ADD_ACCOUNT:
                 return await self.async_step_add_account()
-            if user_input["action"] == STEP_DELETE_ACCOUNT:
+            if user_input[CONF_ACTION] == STEP_REMOVE_ACCOUNT:
                 return await self.async_step_remove_account()
-            if user_input["action"] == STEP_SETTINGS:
+            if user_input[CONF_ACTION] == STEP_SETTINGS:
                 return await self.async_step_settings()
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id=STEP_INIT, data_schema=schema)
 
     async def async_step_add_account(
         self, user_input: dict[str, Any] | None = None
@@ -171,7 +184,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         # account_no: f'{account_no} ({name} {addr})'
 
         if user_input:
-            account_num_to_add = user_input["account_number"]
+            account_num_to_add = user_input[CONF_ACCOUNT_NUMBER]
             for account in self.all_electricity_accounts:
                 if account.account_number == account_num_to_add:
                     # store the account config in main entry instead of creating new entries
@@ -194,8 +207,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                         data={},
                     )
 
-        client = CSGClient()
-        client.restore_session(
+        client = CSGClient.load(
             {
                 CONF_AUTH_TOKEN: self.config_entry.data[CONF_AUTH_TOKEN],
                 CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
@@ -220,7 +232,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                 "No linked ele accounts found in csg account %s",
                 self.config_entry.data[CONF_USERNAME],
             )
-            return self.async_abort(reason="no_account")
+            return self.async_abort(reason=ABORT_NO_ACCOUNT)
         selections = {}
         for account in accounts:
             if account.account_number not in self.config_entry.data[CONF_ACCOUNTS]:
@@ -233,15 +245,15 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                 "Account %s: no ele account to add (all already added), abort",
                 self.config_entry.data[CONF_USERNAME],
             )
-            return self.async_abort(reason="all_added")
+            return self.async_abort(reason=ABORT_ALL_ADDED)
 
         schema = vol.Schema(
             {
-                vol.Required("account_number"): vol.In(selections),
+                vol.Required(CONF_ACCOUNT_NUMBER): vol.In(selections),
             }
         )
         return self.async_show_form(
-            step_id="add_account",
+            step_id=STEP_ADD_ACCOUNT,
             data_schema=schema,
         )
 
@@ -250,24 +262,23 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """remove config and entities"""
         if not self.config_entry.data[CONF_ACCOUNTS]:
-            return self.async_abort(reason="no_account_to_delete")
+            return self.async_abort(reason=ABORT_NO_ACCOUNT_TO_DELETE)
 
         selections = {}
         for _, account_data in self.config_entry.data[CONF_ACCOUNTS].items():
-            account = CSGElectricityAccount()
-            account.load(account_data)
+            account = CSGElectricityAccount.load(account_data)
             selections[
                 account.account_number
             ] = f"{account.account_number} ({account.user_name} {account.address})"
         schema = vol.Schema(
             {
-                vol.Required("account_number"): vol.In(selections),
+                vol.Required(CONF_ACCOUNT_NUMBER): vol.In(selections),
             }
         )
         if user_input is None:
-            return self.async_show_form(step_id="remove_account", data_schema=schema)
+            return self.async_show_form(step_id=STEP_REMOVE_ACCOUNT, data_schema=schema)
 
-        account_num_to_remove = user_input["account_number"]
+        account_num_to_remove = user_input[CONF_ACCOUNT_NUMBER]
 
         # remove entities and device
         device_reg = device_registry.async_get(self.hass)
@@ -329,7 +340,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
             }
         )
         if user_input is None:
-            return self.async_show_form(step_id="settings", data_schema=schema)
+            return self.async_show_form(step_id=STEP_SETTINGS, data_schema=schema)
 
         new_data = self.config_entry.data.copy()
         new_data[CONF_SETTINGS][CONF_UPDATE_INTERVAL] = user_input[CONF_UPDATE_INTERVAL]

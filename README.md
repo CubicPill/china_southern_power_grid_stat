@@ -20,11 +20,13 @@
 - 当月累计用电量（非实时，有2天左右的延迟）
 - 当月内每日用电量（非实时，有2天左右的延迟，需要自行创建实体）
 
-❌**不支持**阶梯电费设置和电费计算（本插件只进行数据抓取和转换，不进行任何计算），暂时也没有支持计划，如有需求，建议单独创建对应的电价实体。
+❌**不支持**阶梯电费设置、峰谷电价设置和电费计算（本插件只进行数据抓取和转换，不进行任何计算），
+暂时也没有支持计划（南网暂时没有统一的API），如有需求，建议单独创建对应的电价实体。
 
 ## 使用方法
 
-使用[HACS](https://hacs.xyz/)添加 Custom repositories 或[手动下载安装](https://github.com/CubicPill/china_southern_power_grid_stat/releases)
+使用[HACS](https://hacs.xyz/)添加 Custom repositories
+或[手动下载安装](https://github.com/CubicPill/china_southern_power_grid_stat/releases)
 
 使用手机号和密码登陆
 
@@ -106,27 +108,27 @@ FRESH_LOGIN = True
 USERNAME = "your_username"
 PASSWORD = "your_password"
 
-client = CSGClient()
-
 if not os.path.isfile("session.json"):
     if not FRESH_LOGIN:
         print("Error: no session file found, fresh login required")
         exit(1)
 
 if FRESH_LOGIN:
+    client = CSGClient()
     try:
         client.authenticate(USERNAME, PASSWORD)
+        print('Login success!')
     except InvalidCredentials:
         print("Wrong username and password combination!")
         exit(1)
 else:
     with open("session.json") as f:
         session_data = json.load(f)
-    client.restore_session(session_data)
+    client = CSGClient.load(session_data)
 
 client.initialize()
 
-session = client.dump_session()
+session = client.dump()
 with open("session.json", "w") as f:
     json.dump(session, f)
 print("Session dumped to session.json")
@@ -138,8 +140,6 @@ print("Verify login:", client.verify_login())
 accounts = client.get_all_electricity_accounts()
 print(f"{len(accounts)} electricity accounts linked to this account")
 
-print("-" * 10)
-
 print(f"Account list:")
 for i, account in enumerate(accounts):
     print(f"{i + 1}. {account.account_number}, {account.address}, {account.user_name}")
@@ -148,25 +148,9 @@ print('\n')
 account: CSGElectricityAccount = accounts[0]
 print(f"Selecting account: {account.account_number}, {account.address}, {account.user_name}")
 
-print("-" * 10)
-
 bal, arr = client.get_balance_and_arrears(account)
 print(f"Account: {account.account_number}, balance: {bal}, arrears: {arr}")
 
-print("-" * 10)
-
-ym_stats = client.get_year_month_stats(account)
-print(f"Year total charge: {ym_stats['year_total_charge']} yuan")
-print(f"Year total usage: {ym_stats['year_total_kwh']} kWh")
-for m in ym_stats["by_month"]:
-    print(f"{m['month']} charge:{m['charge']} yuan, uasge: {m['kwh']} kWh")
-
-print("-" * 10)
-
-month_daily = client.get_month_daily_usage_detail(account)
-print(f"Month total usage: {month_daily['month_total_kwh']} kWh")
-for d in month_daily["by_day"]:
-    print(f"{d['date']} {d['kwh']} kWh")
 ```
 
 ## 代码和功能设计参考
