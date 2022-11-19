@@ -1,0 +1,47 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "\u8d26\u53f7\u5df2\u6dfb\u52a0\uff0c\u8bf7\u52ff\u91cd\u590d\u6dfb\u52a0"
+        },
+        "error": {
+            "cannot_connect": "\u7f51\u7edc\u5f02\u5e38",
+            "invalid_auth": "\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef",
+            "unknown": "\u672a\u77e5\u9519\u8bef"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "password": "\u5bc6\u7801",
+                    "username": "\u624b\u673a\u53f7"
+                },
+                "description": "\u4f7f\u7528\u624b\u673a\u53f7\u548c\u5bc6\u7801\u767b\u5f55",
+                "title": "\u767b\u9646\u5357\u65b9\u7535\u7f51"
+            }
+        }
+    },
+    "options": {
+        "abort": {
+            "all_added": "\u6ca1\u6709\u53ef\u6dfb\u52a0\u5230\u6b64\u96c6\u6210\u7684\u7f34\u8d39\u53f7",
+            "no_account": "\u8d26\u6237\u672a\u7ed1\u5b9a\u7f34\u8d39\u53f7",
+            "no_account_to_delete": "\u6b64\u96c6\u6210\u672a\u7ed1\u5b9a\u7f34\u8d39\u53f7"
+        },
+        "step": {
+            "add_account": {
+                "title": "\u9009\u62e9\u7f34\u8d39\u53f7"
+            },
+            "init": {
+                "title": "\u9009\u62e9\u64cd\u4f5c"
+            },
+            "remove_account": {
+                "title": "\u79fb\u9664\u7f34\u8d39\u53f7"
+            },
+            "settings": {
+                "data": {
+                    "update_interval": "\u66f4\u65b0\u95f4\u9694\uff08\u79d2\uff09",
+                    "update_timeout": "\u8bf7\u6c42\u8d85\u65f6\uff08\u79d2\uff09"
+                },
+                "title": "\u53c2\u6570\u8bbe\u7f6e"
+            }
+        }
+    }
+}
