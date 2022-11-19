@@ -258,8 +258,8 @@ class CSGClient:
             response_data,
         )
         if response_data["sta"] == RESP_STA_NO_LOGIN:
-            raise NotLoggedIn(response_data["sta"], response_data["message"])
-        raise CSGAPIError(response_data["sta"], response_data["message"])
+            raise NotLoggedIn(response_data["sta"], response_data.get("message"))
+        raise CSGAPIError(response_data["sta"], response_data.get("message"))
 
     # end internal utility functions
 
@@ -312,7 +312,7 @@ class CSGClient:
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_header["x-auth-token"]
         if resp_data["sta"] == RESP_STA_LOGIN_WRONG_CREDENTIAL:
-            raise InvalidCredentials(resp_data["sta"], resp_data["message"])
+            raise InvalidCredentials(resp_data["sta"], resp_data.get("message"))
         self._handle_unsuccessful_response(resp_data)
 
     def api_query_authentication_result(self) -> dict[str, Any]:
