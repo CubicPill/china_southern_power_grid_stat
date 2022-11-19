@@ -3,7 +3,6 @@ from datetime import timedelta
 
 DOMAIN = "china_southern_power_grid_stat"
 
-DATA_KEY_UNSUB_UPDATE_LISTENER = "unsub_update_listener"
 STATE_UPDATE_UNCHANGED = "unchanged"
 DATA_KEY_LAST_UPDATE_DAY = "last_update_day"
 

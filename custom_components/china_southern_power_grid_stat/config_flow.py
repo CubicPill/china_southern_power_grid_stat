@@ -204,7 +204,10 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                         self.config_entry.data[CONF_USERNAME],
                         account_num_to_add,
                     )
-                    # no separate entry created
+                    _LOGGER.info("Reloading entry because of new added account")
+                    await self.hass.config_entries.async_reload(
+                        self.config_entry.entry_id
+                    )
                     return self.async_create_entry(
                         title="",
                         data={},
@@ -321,6 +324,9 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
             self.config_entry.data[CONF_USERNAME],
             account_num_to_remove,
         )
+        _LOGGER.info("Reloading entry because of deleted account")
+        await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
         return self.async_create_entry(
             title="",
             data={},

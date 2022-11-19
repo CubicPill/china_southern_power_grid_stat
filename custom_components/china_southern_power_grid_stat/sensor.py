@@ -1,6 +1,7 @@
 """Sensors for the China Southern Power Grid Statistics integration."""
 from __future__ import annotations
 
+import asyncio
 import datetime
 import logging
 from datetime import timedelta
@@ -59,6 +60,7 @@ from .csg_client import (
     InvalidCredentials,
     NotLoggedIn,
 )
+from .utils import async_refresh_login_and_update_config
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -132,9 +134,9 @@ async def async_setup_entry(
 
         all_sensors.extend(sensors)
 
-    async_add_entities(all_sensors)
-
     await coordinator.async_config_entry_first_refresh()
+
+    async_add_entities(all_sensors)
 
 
 class CSGBaseSensor(
@@ -273,10 +275,14 @@ class CSGCoordinator(DataUpdateCoordinator):
             self.hass.config_entries.async_get_entry(self._config_entry_id).data
         )
 
-        def csg_fetch_all():
+        self.update_interval = timedelta(config[CONF_SETTINGS][CONF_UPDATE_INTERVAL])
+        _LOGGER.debug("Coordinator update started")
+
+        def csg_fetch_all() -> dict:
 
             if not config[CONF_ACCOUNTS]:
                 # no linked ele accounts
+                _LOGGER.info("No ele account linked, skip coordinator update")
                 return {}
             client = CSGClient.load(
                 {
@@ -285,10 +291,13 @@ class CSGCoordinator(DataUpdateCoordinator):
                 }
             )
             if not client.verify_login():
-                # expired session, reload the config entry, so it could be re-authed
-                self.hass.config_entries.async_reload(self._config_entry_id)
-                # this won't cause errors since sensors should have been deconstructed
-                return {}
+                # expired session
+
+                client = asyncio.get_event_loop().run_until_complete(
+                    async_refresh_login_and_update_config(
+                        client, self.hass, self.config_entry
+                    )
+                )
 
             client.initialize()
 
@@ -334,14 +343,14 @@ class CSGCoordinator(DataUpdateCoordinator):
 
                 if this_day <= 5:
                     update_last_month = True
-
+                today_first_update_triggered = (
+                    self.hass.data[DOMAIN][self._config_entry_id][
+                        DATA_KEY_LAST_UPDATE_DAY
+                    ]
+                    == this_day
+                )
                 if this_month == 1 and this_day <= 5:
-                    if (
-                        self.hass.data[DOMAIN][self._config_entry_id][
-                            DATA_KEY_LAST_UPDATE_DAY
-                        ]
-                        < this_day
-                    ):
+                    if not today_first_update_triggered:
                         update_last_year = True
 
             for account_number, account_data in config[CONF_ACCOUNTS].items():
