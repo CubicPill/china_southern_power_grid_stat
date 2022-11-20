@@ -74,7 +74,6 @@ async def async_setup_entry(
     if not config_entry.data[CONF_ACCOUNTS]:
         _LOGGER.info("No ele accounts in config, exit entry setup")
         return
-    hass.data[DOMAIN][config_entry.entry_id]["cache"] = {}
     coordinator = CSGCoordinator(hass, config_entry.entry_id)
 
     all_sensors = []
@@ -134,9 +133,9 @@ async def async_setup_entry(
 
         all_sensors.extend(sensors)
 
-    await coordinator.async_config_entry_first_refresh()
-
     async_add_entities(all_sensors)
+
+    await coordinator.async_refresh()
 
 
 class CSGBaseSensor(
@@ -211,6 +210,12 @@ class CSGBaseSensor(
             )
         elif new_native_value == STATE_UPDATE_UNCHANGED:
             # no update for this sensor, skip
+            _LOGGER.debug(
+                "Sensor %s_%s doesn't need to be updated, skip",
+                self._account_number,
+                self._entity_suffix,
+            )
+            # self.async_write_ha_state()
             return
         self._attr_native_value = new_native_value
 
@@ -225,7 +230,11 @@ class CSGBaseSensor(
                     self._extra_state_attributes_key,
                 )
             self._attr_extra_state_attributes = new_attributes
-
+        _LOGGER.debug(
+            "Sensor %s_%s update done!",
+            self._account_number,
+            self._entity_suffix,
+        )
         self.async_write_ha_state()
 
 
@@ -275,7 +284,10 @@ class CSGCoordinator(DataUpdateCoordinator):
             self.hass.config_entries.async_get_entry(self._config_entry_id).data
         )
 
-        self.update_interval = timedelta(config[CONF_SETTINGS][CONF_UPDATE_INTERVAL])
+        self.update_interval = timedelta(
+            seconds=config[CONF_SETTINGS][CONF_UPDATE_INTERVAL]
+        )
+        _LOGGER.debug("Coordinator update interval: %d", self.update_interval.seconds)
         _LOGGER.debug("Coordinator update started")
 
         def csg_fetch_all() -> dict:
