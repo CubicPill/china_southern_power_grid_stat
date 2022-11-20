@@ -110,7 +110,7 @@ class CSGElectricityAccount:
     def __init__(
         self,
         account_number: str | None = None,
-        area_code: AreaCode | None = None,
+        area_code: str | None = None,
         ele_customer_id: str | None = None,
         metering_point_id: str | None = None,
         address: str | None = None,
@@ -121,7 +121,7 @@ class CSGElectricityAccount:
         # the 16-digit billing number, as a unique identifier, not used in api for now
         self.account_number = account_number
 
-        self._area_code: AreaCode = area_code
+        self.area_code = area_code
 
         # this may change on every login, alternative name in js code is `binding_id`
         self.ele_customer_id = ele_customer_id
@@ -159,18 +159,13 @@ class CSGElectricityAccount:
                 raise ValueError(f"Missing key {k}")
         account = CSGElectricityAccount(
             account_number=data[ATTR_ACCOUNT_NUMBER],
-            area_code=AreaCode(data[ATTR_AREA_CODE]),
+            area_code=data[ATTR_AREA_CODE],
             ele_customer_id=data[ATTR_ELE_CUSTOMER_ID],
             metering_point_id=data[ATTR_METERING_POINT_ID],
             address=data[ATTR_ADDRESS],
             user_name=data[ATTR_USER_NAME],
         )
         return account
-
-    @property
-    def area_code(self) -> str:
-        """area_code so it returns the string"""
-        return str(self._area_code.value)
 
 
 class CSGClient:
@@ -520,7 +515,7 @@ class CSGClient:
             metering_point_id = metering_point_data[0]["meteringPointId"]
             account = CSGElectricityAccount(
                 item["eleCustNumber"],
-                AreaCode(item["areaCode"]),
+                item["areaCode"],
                 item["bindingId"],
                 metering_point_id,
                 item["eleAddress"],

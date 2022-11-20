@@ -26,19 +26,7 @@ class LoginType(Enum):
     LOGIN_TYPE_CSG_QR = "30"
 
 
-class AreaCode(Enum):
-    """Area codes"""
-
-    GUANGZHOU = "080000"
-    SHENZHEN = "090000"
-    GUANGDONG = "030000"  # Rest of Guangdong
-    GUANGXI = "040000"
-    YUNNAN = "050000"
-    GUIZHOU = "060000"
-    HAINAN = "070000"
-
-
-AREACODE_FALLBACK = AreaCode.GUANGDONG.value
+AREACODE_FALLBACK = AREACODE_GUANGDONG = "030000"
 
 # https://95598.csg.cn/js/chunk-31aec193.1.6.177.1667607288138.js
 CREDENTIAL_PUBKEY = (
