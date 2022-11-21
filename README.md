@@ -34,6 +34,10 @@
 使用[HACS](https://hacs.xyz/)添加 Custom repositories
 或[手动下载安装](https://github.com/CubicPill/china_southern_power_grid_stat/releases)
 
+注意：本集成需求`Home Assistant`最低版本为`2022.8`。
+
+### 配置界面
+
 使用手机号和密码登陆
 
 <img src="https://raw.githubusercontent.com/CubicPill/china_southern_power_grid_stat/master/img/setup_login.png" alt="" style="width: 400px;">
