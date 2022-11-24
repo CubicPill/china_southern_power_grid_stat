@@ -15,5 +15,5 @@
     "@cubicpill"
   ],
   "iot_class": "cloud_polling",
-  "version": "1.0.0-beta"
+  "version": "1.0.1"
 }
