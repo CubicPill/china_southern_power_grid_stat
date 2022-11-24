@@ -8,6 +8,10 @@
           "username": "手机号",
           "password": "密码"
         }
+      },
+      "reauth_confirm": {
+        "title": "重新登陆账号",
+        "description": "自动登陆失败（用户名或密码错误），请重新输入"
       }
     },
     "error": {
@@ -16,6 +20,7 @@
       "unknown": "未知错误"
     },
     "abort": {
+      "reauth_successful": "账号密码刷新成功",
       "already_configured": "账号已添加，请勿重复添加"
     }
   },

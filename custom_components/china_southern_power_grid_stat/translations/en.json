@@ -1,7 +1,8 @@
 {
     "config": {
         "abort": {
-            "already_configured": "\u8d26\u53f7\u5df2\u6dfb\u52a0\uff0c\u8bf7\u52ff\u91cd\u590d\u6dfb\u52a0"
+            "already_configured": "\u8d26\u53f7\u5df2\u6dfb\u52a0\uff0c\u8bf7\u52ff\u91cd\u590d\u6dfb\u52a0",
+            "reauth_successful": "\u8d26\u53f7\u5bc6\u7801\u5237\u65b0\u6210\u529f"
         },
         "error": {
             "cannot_connect": "\u7f51\u7edc\u5f02\u5e38",
@@ -9,6 +10,10 @@
             "unknown": "\u672a\u77e5\u9519\u8bef"
         },
         "step": {
+            "reauth_confirm": {
+                "description": "\u81ea\u52a8\u767b\u9646\u5931\u8d25\uff08\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef\uff09\uff0c\u8bf7\u91cd\u65b0\u8f93\u5165",
+                "title": "\u91cd\u65b0\u767b\u9646\u8d26\u53f7"
+            },
             "user": {
                 "data": {
                     "password": "\u5bc6\u7801",

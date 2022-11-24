@@ -19,7 +19,6 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -57,7 +56,6 @@ from .csg_client import (
     CSGAPIError,
     CSGClient,
     CSGElectricityAccount,
-    InvalidCredentials,
     NotLoggedIn,
 )
 from .utils import async_refresh_login_and_update_config
@@ -452,8 +450,6 @@ class CSGCoordinator(DataUpdateCoordinator):
                 config[CONF_SETTINGS][CONF_UPDATE_TIMEOUT]
             ):
                 return await self.hass.async_add_executor_job(csg_fetch_all)
-        except InvalidCredentials as err:
-            raise ConfigEntryAuthFailed from err
         except NotLoggedIn as err:
             raise UpdateFailed("Session invalidated unexpectedly") from err
         except CSGAPIError as err:

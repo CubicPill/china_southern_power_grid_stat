@@ -82,6 +82,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for China Southern Power Grid Statistics."""
 
     VERSION = 1
+    reauth_entry: config_entries.ConfigEntry | None = None
 
     @staticmethod
     @callback
@@ -125,6 +126,29 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
         else:
 
+            if self.reauth_entry:
+                new_data = self.reauth_entry.data.copy()
+                if user_input[CONF_USERNAME] != new_data[CONF_USERNAME]:
+                    _LOGGER.warning(
+                        "Account name changed: previous: %s, now: %s",
+                        new_data[CONF_USERNAME],
+                        user_input[CONF_USERNAME],
+                    )
+                new_data[CONF_USERNAME] = user_input[CONF_USERNAME]
+                new_data[CONF_PASSWORD] = user_input[CONF_PASSWORD]
+                new_data[CONF_AUTH_TOKEN] = session_data[CONF_AUTH_TOKEN]
+                new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
+                self.hass.config_entries.async_update_entry(
+                    self.reauth_entry,
+                    data=new_data,
+                    title=f"CSG-{user_input[CONF_USERNAME]}",
+                )
+                await self.hass.config_entries.async_reload(self.reauth_entry.entry_id)
+                _LOGGER.info(
+                    f"Reauth of account %s is successful!", user_input[CONF_USERNAME]
+                )
+                return self.async_abort(reason="reauth_successful")
+
             _LOGGER.info("Adding csg account %s", user_input[CONF_USERNAME])
             return self.async_create_entry(
                 title=f"CSG-{user_input[CONF_USERNAME]}",
@@ -144,6 +168,22 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id=STEP_USER, data_schema=schema, errors=errors
         )
+
+    async def async_step_reauth(self, user_input=None):
+        """Perform reauth upon an API authentication error."""
+        self.reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Dialog that informs the user that reauth is required."""
+        if user_input is None:
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=vol.Schema({}),
+            )
+        return await self.async_step_user()
 
 
 class CSGOptionsFlowHandler(config_entries.OptionsFlow):
