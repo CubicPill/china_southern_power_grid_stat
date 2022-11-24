@@ -145,7 +145,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 await self.hass.config_entries.async_reload(self.reauth_entry.entry_id)
                 _LOGGER.info(
-                    f"Reauth of account %s is successful!", user_input[CONF_USERNAME]
+                    "Reauth of account %s is successful!", user_input[CONF_USERNAME]
                 )
                 return self.async_abort(reason="reauth_successful")
 

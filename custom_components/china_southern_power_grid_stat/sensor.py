@@ -30,6 +30,7 @@ from homeassistant.helpers.update_coordinator import (
 from .const import (
     ATTR_KEY_LAST_MONTH_BY_DAY,
     ATTR_KEY_LAST_YEAR_BY_MONTH,
+    ATTR_KEY_LATEST_DAY_DATE,
     ATTR_KEY_THIS_MONTH_BY_DAY,
     ATTR_KEY_THIS_YEAR_BY_MONTH,
     CONF_ACCOUNTS,
@@ -46,6 +47,7 @@ from .const import (
     SUFFIX_LAST_MONTH_KWH,
     SUFFIX_LAST_YEAR_COST,
     SUFFIX_LAST_YEAR_KWH,
+    SUFFIX_LATEST_DAY_KWH,
     SUFFIX_THIS_MONTH_KWH,
     SUFFIX_THIS_YEAR_COST,
     SUFFIX_THIS_YEAR_KWH,
@@ -86,6 +88,13 @@ async def async_setup_entry(
                 coordinator,
                 account_number,
                 SUFFIX_YESTERDAY_KWH,
+            ),
+            # latest day data is available, with extra attributes about the date
+            CSGEnergySensor(
+                coordinator,
+                account_number,
+                SUFFIX_LATEST_DAY_KWH,
+                extra_state_attributes_key=ATTR_KEY_LATEST_DAY_DATE,
             ),
             # this year's total energy, with extra attributes about monthly usage
             CSGEnergySensor(
@@ -397,7 +406,9 @@ class CSGCoordinator(DataUpdateCoordinator):
                         "Account %s, skipping getting last year data",
                         config[CONF_USERNAME],
                     )
-                if update_last_month:
+                if update_last_month or (not this_month_by_day):
+                    # either at the beginning of this month or this month's data hasn't been available yet
+                    # in normal cases the second condition will become false earlier than the first one
                     (
                         last_month_kwh,
                         last_month_by_day,
@@ -413,11 +424,33 @@ class CSGCoordinator(DataUpdateCoordinator):
                         "Account %s, skipping getting last month data",
                         config[CONF_USERNAME],
                     )
-
+                if this_month_by_day:
+                    latest_day_kwh = this_month_by_day[-1]["kwh"]
+                    latest_day_date = this_month_by_day[-1]["date"]
+                else:
+                    # this month isn't available yet (typically during the first 3 days)
+                    # let's try last month
+                    if last_month_by_day:
+                        latest_day_kwh = last_month_by_day[-1]["kwh"]
+                        latest_day_date = last_month_by_day[-1]["date"]
+                    else:
+                        # this shouldn't normally happen!
+                        # since at above we checked if there's no this month's data, update last month anyway
+                        # leave it here as last resort
+                        _LOGGER.error(
+                            "Account %s, no latest day data available",
+                            config[CONF_USERNAME],
+                        )
+                        latest_day_kwh = STATE_UNAVAILABLE
+                        latest_day_date = STATE_UNAVAILABLE
                 data_ret[account_number] = {
                     SUFFIX_BAL: bal,
                     SUFFIX_ARR: arr,
                     SUFFIX_YESTERDAY_KWH: yesterday_kwh,
+                    SUFFIX_LATEST_DAY_KWH: latest_day_kwh,
+                    ATTR_KEY_LATEST_DAY_DATE: {
+                        ATTR_KEY_LATEST_DAY_DATE: latest_day_date
+                    },
                     SUFFIX_THIS_YEAR_KWH: this_year_kwh,
                     SUFFIX_THIS_YEAR_COST: this_year_cost,
                     ATTR_KEY_THIS_YEAR_BY_MONTH: {
