@@ -27,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 class CSGAPIError(Exception):
     """Generic API errors"""
 
-    def __init__(self, sta: str, msg: str) -> None:
+    def __init__(self, sta: str, msg: str | None = None) -> None:
         """sta: status code, msg: message"""
         Exception.__init__(self)
         self.sta = sta
@@ -37,11 +37,11 @@ class CSGAPIError(Exception):
         return f"<CSGAPIError sta={self.sta} message={self.msg}>"
 
 
-class CSGHTTPError(Exception):
+class CSGHTTPError(CSGAPIError):
     """Unexpected HTTP status code (!=200)"""
 
     def __init__(self, code: int) -> None:
-        Exception.__init__(self)
+        CSGAPIError.__init__(self, sta=f"HTTP{code}")
         self.status_code = code
 
     def __str__(self) -> str:
@@ -245,11 +245,12 @@ class CSGClient:
 
         raise NotImplementedError()
 
-    def _handle_unsuccessful_response(self, response_data: dict):
+    def _handle_unsuccessful_response(self, api_path: str, response_data: dict):
         """Handles sta=!RESP_STA_SUCCESS"""
         _LOGGER.debug(
-            "Account %s had a unsuccessful response %s",
+            "Account customer number: %s, unsuccessful response while calling %s: %s",
             self.customer_number,
+            api_path,
             response_data,
         )
         if response_data["sta"] == RESP_STA_NO_LOGIN:
@@ -271,7 +272,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload, with_auth=False)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return True
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_login_with_sms_code(self, phone_no: str, code: str):
         """Login with phone number and SMS code"""
@@ -288,7 +289,7 @@ class CSGClient:
         )
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_header["x-auth-token"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_login_with_password(self, phone_no: str, password: str):
         """Login with phone number and password"""
@@ -308,7 +309,7 @@ class CSGClient:
             return resp_header["x-auth-token"]
         if resp_data["sta"] == RESP_STA_LOGIN_WRONG_CREDENTIAL:
             raise InvalidCredentials(resp_data["sta"], resp_data.get("message"))
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_authentication_result(self) -> dict[str, Any]:
         """Contains custNumber, used to verify login"""
@@ -317,7 +318,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_get_user_info(self) -> dict[str, Any]:
         """Get account info"""
@@ -326,7 +327,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_get_all_linked_electricity_accounts(self) -> list[dict[str, Any]]:
         """List all linked electricity accounts under this account"""
@@ -335,7 +336,7 @@ class CSGClient:
         if resp_data["sta"] == RESP_STA_SUCCESS:
             _LOGGER.debug("Total %d users under this account", len(resp_data["data"]))
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_get_metering_point(
         self,
@@ -354,7 +355,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_day_electric_by_m_point(
         self,
@@ -376,7 +377,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_account_surplus(self, area_code: str, ele_customer_id: str):
         """Contains: balance and arrears"""
@@ -385,7 +386,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_get_fee_analyze_details(
         self, year: int, area_code: str, ele_customer_id: str
@@ -403,7 +404,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_day_electric_by_m_point_yesterday(
         self,
@@ -416,7 +417,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_charges(self, area_code: str, ele_customer_id: str, _type="0"):
         """Contains: balance and arrears, metering points"""
@@ -429,7 +430,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     def api_logout(self, logon_chan: str, cred_type) -> None:
         """logout"""
@@ -438,7 +439,7 @@ class CSGClient:
         _, resp_data = self._make_request(path, payload)
         if resp_data["sta"] == RESP_STA_SUCCESS:
             return resp_data["data"]
-        self._handle_unsuccessful_response(resp_data)
+        self._handle_unsuccessful_response(path, resp_data)
 
     # end raw api functions
 
