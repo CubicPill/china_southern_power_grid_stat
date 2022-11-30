@@ -5,6 +5,7 @@ import asyncio
 import datetime
 import logging
 from datetime import timedelta
+from typing import Any
 
 import async_timeout
 from homeassistant.components.sensor import (
@@ -197,6 +198,14 @@ class CSGBaseSensor(
             self._account_number,
             self._entity_suffix,
         )
+
+        if not self._coordinator.data:
+            _LOGGER.error("Coordinator has no data")
+            self._attr_native_value = STATE_UNAVAILABLE
+            self._attr_extra_state_attributes = {}
+            self.async_write_ha_state()
+            return
+
         account_data = self._coordinator.data.get(self._account_number)
         if account_data is None:
             _LOGGER.warning(
@@ -281,7 +290,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             ),
         )
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API endpoint.
 
         This is the place to pre-process the data to lookup tables
@@ -296,6 +305,30 @@ class CSGCoordinator(DataUpdateCoordinator):
         )
         _LOGGER.debug("Coordinator update interval: %d", self.update_interval.seconds)
         _LOGGER.debug("Coordinator update started")
+
+        def _safe_fetch(func: callable, num_ret: int, *args, **kwargs):
+            if num_ret == 1:
+                ret = STATE_UNAVAILABLE
+            else:
+                ret = [STATE_UNAVAILABLE] * num_ret
+
+            try:
+                ret = func(*args, **kwargs)
+            except CSGAPIError as err:
+                _LOGGER.error(
+                    "Error fetching data in coordinator: function %s, %s",
+                    func.__name__,
+                    err,
+                )
+
+            if num_ret == 1:
+                # only one return value
+                return ret
+            if len(ret) != num_ret:
+                raise ValueError(
+                    f"Number of return args doesn't match, expected: {num_ret}, got: {len(ret)}"
+                )
+            return ret
 
         def csg_fetch_all() -> dict:
 
@@ -335,7 +368,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             # update policy for last month:
             # for the first 5 days of a month, update every `update_interval`
             # for the rest of the time, do not update
-            #
+
             # update policy for last year:
             # for the first 5 days of Jan, update daily at first update
             # for the rest of the time, do not update
@@ -376,18 +409,21 @@ class CSGCoordinator(DataUpdateCoordinator):
 
                 account = CSGElectricityAccount.load(account_data)
 
-                bal, arr = client.get_balance_and_arrears(account)
+                bal, arr = _safe_fetch(client.get_balance_and_arrears, 2, account)
 
-                yesterday_kwh = client.get_yesterday_kwh(account)
+                yesterday_kwh = _safe_fetch(client.get_yesterday_kwh, 1, account)
 
                 (
                     this_year_cost,
                     this_year_kwh,
                     this_year_by_month,
-                ) = client.get_year_month_stats(account, this_year)
+                ) = _safe_fetch(client.get_year_month_stats, 3, account, this_year)
 
-                this_month_kwh, this_month_by_day = client.get_month_daily_usage_detail(
-                    account, (this_year, this_month)
+                this_month_kwh, this_month_by_day = _safe_fetch(
+                    client.get_month_daily_usage_detail,
+                    2,
+                    account,
+                    (this_year, this_month),
                 )
 
                 if update_last_year:
@@ -395,7 +431,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                         last_year_cost,
                         last_year_kwh,
                         last_year_by_month,
-                    ) = client.get_year_month_stats(account, last_year)
+                    ) = _safe_fetch(client.get_year_month_stats, 3, account, last_year)
                 else:
                     last_year_cost, last_year_kwh, last_year_by_month = (
                         STATE_UPDATE_UNCHANGED,
@@ -406,15 +442,20 @@ class CSGCoordinator(DataUpdateCoordinator):
                         "Account %s, skipping getting last year data",
                         config[CONF_USERNAME],
                     )
-                if update_last_month or (not this_month_by_day):
+                if (
+                    update_last_month
+                    or (not this_month_by_day)
+                    or (this_month_by_day == STATE_UNAVAILABLE)
+                ):
                     # either at the beginning of this month or this month's data hasn't been available yet
                     # in normal cases the second condition will become false earlier than the first one
-                    (
-                        last_month_kwh,
-                        last_month_by_day,
-                    ) = client.get_month_daily_usage_detail(
-                        account, (this_year, last_month)
+                    (last_month_kwh, last_month_by_day,) = _safe_fetch(
+                        client.get_month_daily_usage_detail,
+                        2,
+                        account,
+                        (this_year, last_month),
                     )
+
                 else:
                     last_month_kwh, last_month_by_day = (
                         STATE_UPDATE_UNCHANGED,
@@ -424,25 +465,42 @@ class CSGCoordinator(DataUpdateCoordinator):
                         "Account %s, skipping getting last month data",
                         config[CONF_USERNAME],
                     )
-                if this_month_by_day:
-                    latest_day_kwh = this_month_by_day[-1]["kwh"]
-                    latest_day_date = this_month_by_day[-1]["date"]
+
+                # TODO refactor these logics
+                if (
+                    this_month_by_day == STATE_UNAVAILABLE
+                    and last_month_by_day == STATE_UNAVAILABLE
+                ):
+                    latest_day_kwh = STATE_UNAVAILABLE
+                    latest_day_date = STATE_UNAVAILABLE
                 else:
-                    # this month isn't available yet (typically during the first 3 days)
-                    # let's try last month
-                    if last_month_by_day:
-                        latest_day_kwh = last_month_by_day[-1]["kwh"]
-                        latest_day_date = last_month_by_day[-1]["date"]
+                    if (
+                        this_month_by_day != STATE_UNAVAILABLE
+                        and len(this_month_by_day) >= 1
+                    ):
+                        latest_day_kwh = this_month_by_day[-1]["kwh"]
+                        latest_day_date = this_month_by_day[-1]["date"]
                     else:
-                        # this shouldn't normally happen!
-                        # since at above we checked if there's no this month's data, update last month anyway
-                        # leave it here as last resort
-                        _LOGGER.error(
-                            "Account %s, no latest day data available",
-                            config[CONF_USERNAME],
-                        )
-                        latest_day_kwh = STATE_UNAVAILABLE
-                        latest_day_date = STATE_UNAVAILABLE
+                        # this month isn't available yet (typically during the first 3 days)
+                        # let's try last month
+                        if (
+                            last_month_by_day
+                            not in [
+                                STATE_UNAVAILABLE,
+                                STATE_UPDATE_UNCHANGED,
+                            ]
+                            and len(last_month_by_day) >= 1
+                        ):
+                            latest_day_kwh = last_month_by_day[-1]["kwh"]
+                            latest_day_date = last_month_by_day[-1]["date"]
+                        else:
+                            _LOGGER.error(
+                                "Account %s, no latest day data available",
+                                config[CONF_USERNAME],
+                            )
+                            latest_day_kwh = STATE_UNAVAILABLE
+                            latest_day_date = STATE_UNAVAILABLE
+
                 data_ret[account_number] = {
                     SUFFIX_BAL: bal,
                     SUFFIX_ARR: arr,
@@ -487,3 +545,6 @@ class CSGCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Session invalidated unexpectedly") from err
         except CSGAPIError as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err
+        except Exception as err:
+            _LOGGER.error("Unexpected exception: %s", err)
+            raise UpdateFailed(f"Unexpected exception: {err}") from err
