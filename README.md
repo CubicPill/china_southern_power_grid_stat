@@ -3,6 +3,7 @@
 # 南方电网电费数据HA集成
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/cubicpill/china_southern_power_grid_stat)](https://github.com/CubicPill/china_southern_power_grid_stat/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## 支持功能
@@ -17,14 +18,15 @@
 
 - 当前余额和欠费
 - 昨日用电量
+- 最新一日用电量（每日用电量最新数据）
 - 本年度总用电量和总电费（非实时，更新到上个月）
 - 本年度内每月用电量和电费（非实时，更新到上个月）
 - 上年度总用电量和总电费
 - 上年度每月用电量和电费
 - 当月累计用电量（非实时，有2天左右的延迟）
 - 当月内每日用电量（非实时，有2天左右的延迟）
-- 上月累计用电量（月初可能有2天左右延迟）
-- 上月每日用电量（月初有2天左右的延迟）
+- 上月累计用电量
+- 上月每日用电量
 
 ❌**不支持**阶梯电费设置、峰谷电价设置和电费计算（本插件只进行数据抓取和转换，不进行任何计算），
 暂时也没有支持计划（南网暂时没有统一的API），如有需求，建议单独创建对应的电价实体。
