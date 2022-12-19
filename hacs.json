@@ -1,5 +1,6 @@
 {
   "name": "China Southern Power Grid Statistics",
   "render_readme": true,
+  "country": "CN",
   "homeassistant": "2022.8"
 }
