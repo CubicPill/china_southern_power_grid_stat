@@ -2,7 +2,7 @@
 
 # 南方电网电费数据HA集成
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/cubicpill/china_southern_power_grid_stat)](https://github.com/CubicPill/china_southern_power_grid_stat/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
@@ -33,8 +33,7 @@
 
 ## 使用方法
 
-使用[HACS](https://hacs.xyz/)添加 Custom repositories
-或[手动下载安装](https://github.com/CubicPill/china_southern_power_grid_stat/releases)
+使用[HACS](https://hacs.xyz/)或[手动下载安装](https://github.com/CubicPill/china_southern_power_grid_stat/releases)
 
 注意：本集成需求`Home Assistant`最低版本为`2022.8`。
 
