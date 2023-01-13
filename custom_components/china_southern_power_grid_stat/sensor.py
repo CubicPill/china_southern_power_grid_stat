@@ -362,6 +362,10 @@ class CSGCoordinator(DataUpdateCoordinator):
                 current_dt.day,
             )
             last_year, last_month = this_year - 1, this_month - 1
+            if last_month == 0:
+                last_month_ym = (last_year, 12)
+            else:
+                last_month_ym = (this_year, last_month)
 
             # for last month and last year data, they won't change over a long period of time - so we could use cache
             #
@@ -453,7 +457,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                         client.get_month_daily_usage_detail,
                         2,
                         account,
-                        (this_year, last_month),
+                        last_month_ym,
                     )
 
                 else:
