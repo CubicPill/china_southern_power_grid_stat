@@ -110,8 +110,8 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(step_id=STEP_USER, data_schema=schema)
 
         errors = {}
-
-        await self.async_set_unique_id(user_input[CONF_USERNAME])
+        unique_id = f"CSG-{user_input[CONF_USERNAME]}"
+        await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured()
 
         # noinspection PyBroadException
@@ -224,8 +224,12 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Select one of the electricity accounts from current account"""
         # account_no: f'{account_no} ({name} {addr})'
-        # todo several accounts could bind to the same ele account - need to check
 
+        all_csg_config_entries = self.hass.config_entries.async_entries(DOMAIN)
+        # get a list of all account numbers from all config entries
+        all_account_numbers = []
+        for config_entry in all_csg_config_entries:
+            all_account_numbers.extend(config_entry.data[CONF_ACCOUNTS].keys())
         if user_input:
             account_num_to_add = user_input[CONF_ACCOUNT_NUMBER]
             for account in self.all_electricity_accounts:
@@ -252,7 +256,9 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                         title="",
                         data={},
                     )
+        # end of handling add account
 
+        # start of getting all unbound accounts
         client = CSGClient.load(
             {
                 CONF_AUTH_TOKEN: self.config_entry.data[CONF_AUTH_TOKEN],
@@ -281,7 +287,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_abort(reason=ABORT_NO_ACCOUNT)
         selections = {}
         for account in accounts:
-            if account.account_number not in self.config_entry.data[CONF_ACCOUNTS]:
+            if account.account_number not in all_account_numbers:
                 # avoid adding one ele account twice
                 selections[
                     account.account_number
