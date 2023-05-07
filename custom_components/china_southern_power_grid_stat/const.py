@@ -34,15 +34,20 @@ ERROR_UNKNOWN = "unknown"
 VALUE_CSG_LOGIN_TYPE_PWD = "10"
 
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=4).seconds
-DEFAULT_UPDATE_TIMEOUT = 20
+DEFAULT_UPDATE_TIMEOUT = 60
 
 SUFFIX_BAL = "balance"
 SUFFIX_ARR = "arrears"
 SUFFIX_YESTERDAY_KWH = "yesterday_kwh"
 SUFFIX_LATEST_DAY_KWH = "latest_day_kwh"
+SUFFIX_LATEST_DAY_COST = "latest_day_cost"
 SUFFIX_THIS_YEAR_KWH = "this_year_total_usage"
 SUFFIX_THIS_YEAR_COST = "this_year_total_cost"
 SUFFIX_THIS_MONTH_KWH = "this_month_total_usage"
+SUFFIX_THIS_MONTH_COST = "this_month_total_cost"
+SUFFIX_CURRENT_LADDER = "current_ladder"
+SUFFIX_CURRENT_LADDER_REMAINING_KWH = "current_ladder_remaining_kwh"
+SUFFIX_CURRENT_LADDER_TARIFF = "current_ladder_tariff"
 SUFFIX_LAST_YEAR_KWH = "last_year_total_usage"
 SUFFIX_LAST_YEAR_COST = "last_year_total_cost"
 SUFFIX_LAST_MONTH_KWH = "last_month_total_usage"
@@ -52,3 +57,4 @@ ATTR_KEY_THIS_YEAR_BY_MONTH = "this_year_by_month"
 ATTR_KEY_LAST_MONTH_BY_DAY = "last_month_by_day"
 ATTR_KEY_LAST_YEAR_BY_MONTH = "last_year_by_month"
 ATTR_KEY_LATEST_DAY_DATE = "latest_day_date"
+ATTR_KEY_CURRENT_LADDER_START_DATE = "current_ladder_start_date"

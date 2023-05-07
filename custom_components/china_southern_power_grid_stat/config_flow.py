@@ -63,8 +63,7 @@ def authenticate_csg(username: str, password: str) -> CSGClient:
         raise InvalidAuth from exc
     except RequestException as exc:
         raise CannotConnect from exc
-    else:
-        return client
+    return client
 
 
 async def validate_input(
@@ -125,7 +124,6 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected exception")
             errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
         else:
-
             if self.reauth_entry:
                 new_data = self.reauth_entry.data.copy()
                 if user_input[CONF_USERNAME] != new_data[CONF_USERNAME]:

@@ -14,7 +14,12 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_USERNAME, STATE_UNAVAILABLE, UnitOfEnergy
+from homeassistant.const import (
+    CONF_USERNAME,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    UnitOfEnergy,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,6 +30,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import (
+    ATTR_KEY_CURRENT_LADDER_START_DATE,
     ATTR_KEY_LAST_MONTH_BY_DAY,
     ATTR_KEY_LAST_YEAR_BY_MONTH,
     ATTR_KEY_LATEST_DAY_DATE,
@@ -41,10 +47,15 @@ from .const import (
     STATE_UPDATE_UNCHANGED,
     SUFFIX_ARR,
     SUFFIX_BAL,
+    SUFFIX_CURRENT_LADDER,
+    SUFFIX_CURRENT_LADDER_REMAINING_KWH,
+    SUFFIX_CURRENT_LADDER_TARIFF,
     SUFFIX_LAST_MONTH_KWH,
     SUFFIX_LAST_YEAR_COST,
     SUFFIX_LAST_YEAR_KWH,
+    SUFFIX_LATEST_DAY_COST,
     SUFFIX_LATEST_DAY_KWH,
+    SUFFIX_THIS_MONTH_COST,
     SUFFIX_THIS_MONTH_KWH,
     SUFFIX_THIS_YEAR_COST,
     SUFFIX_THIS_YEAR_KWH,
@@ -86,11 +97,18 @@ async def async_setup_entry(
                 account_number,
                 SUFFIX_YESTERDAY_KWH,
             ),
-            # latest day data is available, with extra attributes about the date
+            # latest day usage that is available, with extra attributes about the date
             CSGEnergySensor(
                 coordinator,
                 account_number,
                 SUFFIX_LATEST_DAY_KWH,
+                extra_state_attributes_key=ATTR_KEY_LATEST_DAY_DATE,
+            ),
+            # latest day cost that is available, with extra attributes about the date
+            CSGCostSensor(
+                coordinator,
+                account_number,
+                SUFFIX_LATEST_DAY_COST,
                 extra_state_attributes_key=ATTR_KEY_LATEST_DAY_DATE,
             ),
             # this year's total energy, with extra attributes about monthly usage
@@ -113,6 +131,26 @@ async def async_setup_entry(
                 SUFFIX_THIS_MONTH_KWH,
                 extra_state_attributes_key=ATTR_KEY_THIS_MONTH_BY_DAY,
             ),
+            # this month's total cost, with extra attributes about daily usage
+            CSGCostSensor(
+                coordinator,
+                account_number,
+                SUFFIX_THIS_MONTH_COST,
+                extra_state_attributes_key=ATTR_KEY_THIS_MONTH_BY_DAY,
+            ),
+            # current ladder, with extra attributes about start date
+            CSGLadderStageSensor(
+                coordinator,
+                account_number,
+                SUFFIX_CURRENT_LADDER,
+                extra_state_attributes_key=ATTR_KEY_CURRENT_LADDER_START_DATE,
+            ),
+            # current ladder remaining kwh
+            CSGEnergySensor(
+                coordinator, account_number, SUFFIX_CURRENT_LADDER_REMAINING_KWH
+            ),
+            # current ladder tariff
+            CSGCostSensor(coordinator, account_number, SUFFIX_CURRENT_LADDER_TARIFF),
             # last year's total energy, with extra attributes about monthly usage
             CSGEnergySensor(
                 coordinator,
@@ -268,6 +306,12 @@ class CSGCostSensor(CSGBaseSensor):
     _attr_icon = "mdi:currency-cny"
 
 
+class CSGLadderStageSensor(CSGBaseSensor):
+    """Representation of a CSG Ladder Stage Sensor."""
+
+    _attr_icon = "mdi:stairs"
+
+
 class CSGCoordinator(DataUpdateCoordinator):
     """CSG custom coordinator."""
 
@@ -327,7 +371,6 @@ class CSGCoordinator(DataUpdateCoordinator):
             return ret
 
         def csg_fetch_all() -> dict:
-
             if not config[CONF_ACCOUNTS]:
                 # no linked ele accounts
                 _LOGGER.info("No ele account linked, skip coordinator update")
@@ -406,7 +449,6 @@ class CSGCoordinator(DataUpdateCoordinator):
                         update_last_year = True
 
             for account_number, account_data in config[CONF_ACCOUNTS].items():
-
                 account = CSGElectricityAccount.load(account_data)
 
                 bal, arr = _safe_fetch(client.get_balance_and_arrears, 2, account)
@@ -419,12 +461,61 @@ class CSGCoordinator(DataUpdateCoordinator):
                     this_year_by_month,
                 ) = _safe_fetch(client.get_year_month_stats, 3, account, this_year)
 
-                this_month_kwh, this_month_by_day = _safe_fetch(
+                this_month_kwh_from_usage, this_month_by_day_from_usage = _safe_fetch(
                     client.get_month_daily_usage_detail,
                     2,
                     account,
                     (this_year, this_month),
                 )
+
+                (
+                    this_month_cost,
+                    this_month_kwh_from_cost,
+                    ladder,
+                    this_month_by_day_from_cost,
+                ) = _safe_fetch(
+                    client.get_month_daily_cost_detail,
+                    4,
+                    account,
+                    (this_year, this_month),
+                )
+                if ladder != STATE_UNAVAILABLE:
+                    ladder_stage = ladder["ladder"]
+                    ladder_remaining_kwh = ladder["remaining_kwh"]
+                    ladder_tariff = ladder["tariff"]
+                    ladder_start_date = ladder["start_date"]
+                else:
+                    ladder_stage = STATE_UNAVAILABLE
+                    ladder_remaining_kwh = STATE_UNAVAILABLE
+                    ladder_tariff = STATE_UNAVAILABLE
+                    ladder_start_date = STATE_UNAVAILABLE
+                if (
+                    this_month_by_day_from_cost == STATE_UNAVAILABLE
+                    and this_month_by_day_from_usage == STATE_UNAVAILABLE
+                ):
+                    this_month_by_day = STATE_UNAVAILABLE
+                    this_month_kwh = STATE_UNAVAILABLE
+                elif this_month_by_day_from_cost == STATE_UNAVAILABLE:
+                    this_month_by_day = this_month_by_day_from_usage
+                    this_month_kwh = this_month_kwh_from_usage
+                elif this_month_kwh_from_usage == STATE_UNAVAILABLE:
+                    this_month_by_day = this_month_by_day_from_cost
+                    this_month_kwh = this_month_kwh_from_cost
+                else:
+                    # determine which is the latest
+                    if len(this_month_by_day_from_cost) >= len(
+                        this_month_by_day_from_usage
+                    ):
+                        # the result from daily cost is newer
+                        this_month_by_day = this_month_by_day_from_cost
+                        this_month_kwh = this_month_kwh_from_cost
+                    else:
+                        # the result from daily usage is newer
+                        # but since the result from daily cost contains cost data, need to merge them
+                        this_month_by_day = this_month_by_day_from_usage
+                        for idx, item in enumerate(this_month_by_day_from_cost):
+                            this_month_by_day[idx]["cost"] = item["cost"]
+                        this_month_kwh = this_month_kwh_from_usage
 
                 if update_last_year:
                     (
@@ -449,7 +540,10 @@ class CSGCoordinator(DataUpdateCoordinator):
                 ):
                     # either at the beginning of this month or this month's data hasn't been available yet
                     # in normal cases the second condition will become false earlier than the first one
-                    (last_month_kwh, last_month_by_day,) = _safe_fetch(
+                    (
+                        last_month_kwh,
+                        last_month_by_day,
+                    ) = _safe_fetch(
                         client.get_month_daily_usage_detail,
                         2,
                         account,
@@ -466,19 +560,23 @@ class CSGCoordinator(DataUpdateCoordinator):
                         config[CONF_USERNAME],
                     )
 
-                # TODO refactor these logics
                 if (
                     this_month_by_day == STATE_UNAVAILABLE
                     and last_month_by_day == STATE_UNAVAILABLE
                 ):
                     latest_day_kwh = STATE_UNAVAILABLE
+                    latest_day_cost = STATE_UNAVAILABLE
                     latest_day_date = STATE_UNAVAILABLE
                 else:
                     if (
                         this_month_by_day != STATE_UNAVAILABLE
                         and len(this_month_by_day) >= 1
                     ):
+                        # we have this month's data, use the latest day
                         latest_day_kwh = this_month_by_day[-1]["kwh"]
+                        latest_day_cost = (
+                            this_month_by_day[-1].get("cost") or STATE_UNKNOWN
+                        )
                         latest_day_date = this_month_by_day[-1]["date"]
                     else:
                         # this month isn't available yet (typically during the first 3 days)
@@ -492,6 +590,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                             and len(last_month_by_day) >= 1
                         ):
                             latest_day_kwh = last_month_by_day[-1]["kwh"]
+                            latest_day_cost = STATE_UNKNOWN
                             latest_day_date = last_month_by_day[-1]["date"]
                         else:
                             _LOGGER.error(
@@ -499,6 +598,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                                 config[CONF_USERNAME],
                             )
                             latest_day_kwh = STATE_UNAVAILABLE
+                            latest_day_cost = STATE_UNAVAILABLE
                             latest_day_date = STATE_UNAVAILABLE
 
                 data_ret[account_number] = {
@@ -506,6 +606,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                     SUFFIX_ARR: arr,
                     SUFFIX_YESTERDAY_KWH: yesterday_kwh,
                     SUFFIX_LATEST_DAY_KWH: latest_day_kwh,
+                    SUFFIX_LATEST_DAY_COST: latest_day_cost,
                     ATTR_KEY_LATEST_DAY_DATE: {
                         ATTR_KEY_LATEST_DAY_DATE: latest_day_date
                     },
@@ -520,6 +621,13 @@ class CSGCoordinator(DataUpdateCoordinator):
                         ATTR_KEY_LAST_YEAR_BY_MONTH: last_year_by_month
                     },
                     SUFFIX_THIS_MONTH_KWH: this_month_kwh,
+                    SUFFIX_THIS_MONTH_COST: this_month_cost,
+                    SUFFIX_CURRENT_LADDER: ladder_stage,
+                    SUFFIX_CURRENT_LADDER_REMAINING_KWH: ladder_remaining_kwh,
+                    SUFFIX_CURRENT_LADDER_TARIFF: ladder_tariff,
+                    ATTR_KEY_CURRENT_LADDER_START_DATE: {
+                        ATTR_KEY_CURRENT_LADDER_START_DATE: ladder_start_date
+                    },
                     ATTR_KEY_THIS_MONTH_BY_DAY: {
                         ATTR_KEY_THIS_MONTH_BY_DAY: this_month_by_day
                     },
@@ -545,6 +653,8 @@ class CSGCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Session invalidated unexpectedly") from err
         except CSGAPIError as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err
+        except asyncio.TimeoutError as err:
+            raise UpdateFailed(f"Timeout communicating with API: {err}") from err
         except Exception as err:
             _LOGGER.error("Unexpected exception: %s", err)
             raise UpdateFailed(f"Unexpected exception: {err}") from err
