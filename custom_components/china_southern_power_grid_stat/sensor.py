@@ -14,11 +14,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_USERNAME,
-    ENERGY_KILO_WATT_HOUR,
-    STATE_UNAVAILABLE,
-)
+from homeassistant.const import CONF_USERNAME, STATE_UNAVAILABLE, UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -257,7 +253,7 @@ class CSGBaseSensor(
 class CSGEnergySensor(CSGBaseSensor):
     """Representation of a CSG Energy Sensor."""
 
-    _attr_native_unit_of_measurement = ENERGY_KILO_WATT_HOUR
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL
     _attr_icon = "mdi:lightning-bolt"
