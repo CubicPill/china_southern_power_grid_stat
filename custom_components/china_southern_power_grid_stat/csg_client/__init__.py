@@ -6,6 +6,7 @@ and each update only contains a few requests
 """
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import random
@@ -379,6 +380,31 @@ class CSGClient:
             return resp_data["data"]
         self._handle_unsuccessful_response(path, resp_data)
 
+    def api_query_day_electric_charge_by_m_point(
+        self,
+        year: int,
+        month: int,
+        area_code: str,
+        ele_customer_id: str,
+        metering_point_id: str,
+    ) -> dict:
+        """get charge by day in the given month
+        KNOWN BUG: this api call returns the daily cost data of year_month, but the ladder data will be this month's
+        this api call could take a long time to return (~30s)
+        """
+        path = "charge/queryDayElectricChargeByMPoint"
+        payload = {
+            "areaCode": area_code,
+            "eleCustId": ele_customer_id,
+            "yearMonth": f"{year}{month:02d}",
+            "meteringPointId": metering_point_id,
+        }
+        custom_headers = {"funid": "100t002"}
+        _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
+        if resp_data["sta"] == RESP_STA_SUCCESS:
+            return resp_data["data"]
+        self._handle_unsuccessful_response(path, resp_data)
+
     def api_query_account_surplus(self, area_code: str, ele_customer_id: str):
         """Contains: balance and arrears"""
         path = "charge/queryUserAccountNumberSurplus"
@@ -544,6 +570,47 @@ class CSGClient:
         for d_data in resp_data["result"]:
             by_day.append({"date": d_data["date"], "kwh": float(d_data["power"])})
         return month_total_kwh, by_day
+
+    def get_month_daily_cost_detail(
+        self, account: CSGElectricityAccount, year_month: tuple[int, int]
+    ) -> tuple[float, float, dict, list[dict[str, str | float]]]:
+        """Get daily cost of current month"""
+
+        year, month = year_month
+
+        resp_data = self.api_query_day_electric_charge_by_m_point(
+            year,
+            month,
+            account.area_code,
+            account.ele_customer_id,
+            account.metering_point_id,
+        )
+        month_total_cost = float(resp_data["totalElectricity"])
+        month_total_kwh = float(resp_data["totalPower"])
+        current_ladder = int(resp_data["ladderEle"])
+        # "2023-05-01 00:00:00.0"
+        current_ladder_start_date = datetime.datetime.strptime(
+            resp_data["ladderEleStartDate"], "%Y-%m-%d %H:%M:%S.%f"
+        )
+        current_ladder_remaining_kwh = float(resp_data["ladderEleSurplus"])
+        current_tariff = float(resp_data["ladderEleTariff"])
+        # TODO what will happen to `current_ladder_remaining_kwh` when it's the last ladder?
+        ladder = {
+            "ladder": current_ladder,
+            "start_date": current_ladder_start_date,
+            "remaining_kwh": current_ladder_remaining_kwh,
+            "tariff": current_tariff,
+        }
+        by_day = []
+        for d_data in resp_data["result"]:
+            by_day.append(
+                {
+                    "date": d_data["date"],
+                    "cost": float(d_data["charge"]),
+                    "kwh": float(d_data["power"]),
+                }
+            )
+        return month_total_cost, month_total_kwh, ladder, by_day
 
     def get_balance_and_arrears(
         self, account: CSGElectricityAccount
