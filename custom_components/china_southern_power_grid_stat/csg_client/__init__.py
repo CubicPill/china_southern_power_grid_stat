@@ -585,22 +585,7 @@ class CSGClient:
             account.ele_customer_id,
             account.metering_point_id,
         )
-        month_total_cost = float(resp_data["totalElectricity"])
-        month_total_kwh = float(resp_data["totalPower"])
-        current_ladder = int(resp_data["ladderEle"])
-        # "2023-05-01 00:00:00.0"
-        current_ladder_start_date = datetime.datetime.strptime(
-            resp_data["ladderEleStartDate"], "%Y-%m-%d %H:%M:%S.%f"
-        )
-        current_ladder_remaining_kwh = float(resp_data["ladderEleSurplus"])
-        current_tariff = float(resp_data["ladderEleTariff"])
-        # TODO what will happen to `current_ladder_remaining_kwh` when it's the last ladder?
-        ladder = {
-            "ladder": current_ladder,
-            "start_date": current_ladder_start_date,
-            "remaining_kwh": current_ladder_remaining_kwh,
-            "tariff": current_tariff,
-        }
+
         by_day = []
         for d_data in resp_data["result"]:
             by_day.append(
@@ -610,6 +595,51 @@ class CSGClient:
                     "kwh": float(d_data["power"]),
                 }
             )
+
+        # sometimes the data by day is present, but the total amount is not
+        # however they are usually not the same, the data from api is a bit more than calculated
+        if resp_data["totalElectricity"] is not None:
+            month_total_cost = float(resp_data["totalElectricity"])
+        else:
+            _LOGGER.warning(
+                "Value of totalElectricity is None, calculating from daily data"
+            )
+            month_total_cost = sum(d["cost"] for d in by_day)
+
+        if resp_data["totalPower"] is not None:
+            month_total_kwh = float(resp_data["totalPower"])
+        else:
+            _LOGGER.warning("Value of totalPower is None, calculating from daily data")
+            month_total_kwh = sum(d["kwh"] for d in by_day)
+
+        # sometimes the ladder info is null, handle that
+        if resp_data["ladderEle"] is not None:
+            current_ladder = int(resp_data["ladderEle"])
+        else:
+            current_ladder = None
+        # "2023-05-01 00:00:00.0"
+        if resp_data["ladderEleStartDate"] is not None:
+            current_ladder_start_date = datetime.datetime.strptime(
+                resp_data["ladderEleStartDate"], "%Y-%m-%d %H:%M:%S.%f"
+            )
+        else:
+            current_ladder_start_date = None
+        if resp_data["ladderEleSurplus"] is not None:
+            current_ladder_remaining_kwh = float(resp_data["ladderEleSurplus"])
+        else:
+            current_ladder_remaining_kwh = None
+        if resp_data["ladderEleTariff"] is not None:
+            current_tariff = float(resp_data["ladderEleTariff"])
+        else:
+            current_tariff = None
+        # TODO what will happen to `current_ladder_remaining_kwh` when it's the last ladder?
+        ladder = {
+            "ladder": current_ladder,
+            "start_date": current_ladder_start_date,
+            "remaining_kwh": current_ladder_remaining_kwh,
+            "tariff": current_tariff,
+        }
+
         return month_total_cost, month_total_kwh, ladder, by_day
 
     def get_balance_and_arrears(
