@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import time
+import traceback
 from datetime import timedelta
 from typing import Any
 
@@ -227,46 +229,49 @@ class CSGBaseSensor(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        _LOGGER.debug(
-            "Ele account %s, sensor %s, coordinator update triggered",
-            self._account_number,
-            self._entity_suffix,
-        )
+        # _LOGGER.debug(
+        #     "%s coordinator update triggered",
+        #     self.unique_id,
+        # )
 
         if not self._coordinator.data:
-            _LOGGER.error("Coordinator has no data")
-            self._attr_native_value = STATE_UNAVAILABLE
-            self._attr_extra_state_attributes = {}
+            _LOGGER.error(
+                "%s coordinator has no data",
+                self.unique_id,
+            )
+            self._attr_available = False
             self.async_write_ha_state()
             return
 
         account_data = self._coordinator.data.get(self._account_number)
         if account_data is None:
-            _LOGGER.warning(
-                "Ele account %s not found in coordinator data", self._account_number
-            )
-            self._attr_native_value = STATE_UNAVAILABLE
-            self._attr_extra_state_attributes = {}
+            _LOGGER.warning("%s not found in coordinator data", self.unique_id)
+            self._attr_available = False
             self.async_write_ha_state()
             return
 
         new_native_value = account_data.get(self._entity_suffix)
         if new_native_value is None:
-            new_native_value = STATE_UNAVAILABLE
-            _LOGGER.warning(
-                "Ele account %s, sensor %s, data not found in coordinator data",
-                self._account_number,
-                self._entity_suffix,
-            )
-        elif new_native_value == STATE_UPDATE_UNCHANGED:
-            # no update for this sensor, skip
-            _LOGGER.debug(
-                "Sensor %s_%s doesn't need to be updated, skip",
-                self._account_number,
-                self._entity_suffix,
-            )
-            # self.async_write_ha_state()
+            _LOGGER.warning("%s data not found in coordinator data", self.unique_id)
+            self._attr_available = False
+            self.async_write_ha_state()
             return
+
+        if new_native_value == STATE_UNAVAILABLE:
+            _LOGGER.debug("%s data is unavailable", self.unique_id)
+            self.async_write_ha_state()
+            self._attr_available = False
+            return
+
+        # from this point the value is available
+        self._attr_available = True
+
+        if new_native_value == STATE_UPDATE_UNCHANGED:
+            # no update for this sensor, skip
+            _LOGGER.debug("%s doesn't need to be updated, skip", self.unique_id)
+            return
+
+        # from this point, `new_native_value` is a true value
         self._attr_native_value = new_native_value
 
         if self._extra_state_attributes_key:
@@ -274,17 +279,12 @@ class CSGBaseSensor(
             if new_attributes is None:
                 new_attributes = {}
                 _LOGGER.warning(
-                    "Ele account %s, sensor %s, attribute %s not found in coordinator data",
-                    self._account_number,
-                    self._entity_suffix,
+                    "%s attribute %s not found in coordinator data",
+                    self.unique_id,
                     self._extra_state_attributes_key,
                 )
             self._attr_extra_state_attributes = new_attributes
-        _LOGGER.debug(
-            "Sensor %s_%s update done!",
-            self._account_number,
-            self._entity_suffix,
-        )
+        _LOGGER.debug("%s state update done!", self.unique_id)
         self.async_write_ha_state()
 
 
@@ -480,10 +480,26 @@ class CSGCoordinator(DataUpdateCoordinator):
                     (this_year, this_month),
                 )
                 if ladder != STATE_UNAVAILABLE:
-                    ladder_stage = ladder["ladder"]
-                    ladder_remaining_kwh = ladder["remaining_kwh"]
-                    ladder_tariff = ladder["tariff"]
-                    ladder_start_date = ladder["start_date"]
+                    ladder_stage = (
+                        ladder["ladder"]
+                        if ladder["ladder"] is not None
+                        else STATE_UNAVAILABLE
+                    )
+                    ladder_remaining_kwh = (
+                        ladder["remaining_kwh"]
+                        if ladder["remaining_kwh"] is not None
+                        else STATE_UNAVAILABLE
+                    )
+                    ladder_tariff = (
+                        ladder["tariff"]
+                        if ladder["tariff"] is not None
+                        else STATE_UNAVAILABLE
+                    )
+                    ladder_start_date = (
+                        ladder["start_date"]
+                        if ladder["start_date"] is not None
+                        else STATE_UNAVAILABLE
+                    )
                 else:
                     ladder_stage = STATE_UNAVAILABLE
                     ladder_remaining_kwh = STATE_UNAVAILABLE
@@ -645,10 +661,20 @@ class CSGCoordinator(DataUpdateCoordinator):
         try:
             # Note: asyncio.TimeoutError and aiohttp.ClientError are already
             # handled by the data update coordinator.
-            async with async_timeout.timeout(
-                config[CONF_SETTINGS][CONF_UPDATE_TIMEOUT]
-            ):
-                return await self.hass.async_add_executor_job(csg_fetch_all)
+            timeout = config[CONF_SETTINGS][CONF_UPDATE_TIMEOUT]
+            if timeout < 60:
+                # temporary workaround
+                _LOGGER.warning("Timeout value too low, setting to 60 seconds")
+                timeout = 60
+            async with async_timeout.timeout(timeout):
+                start_ts = time.time()
+                result = await self.hass.async_add_executor_job(csg_fetch_all)
+                _LOGGER.debug(
+                    "Updating all sensors took {:.2f} seconds".format(
+                        time.time() - start_ts
+                    )
+                )
+                return result
         except NotLoggedIn as err:
             raise UpdateFailed("Session invalidated unexpectedly") from err
         except CSGAPIError as err:
@@ -657,4 +683,5 @@ class CSGCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Timeout communicating with API: {err}") from err
         except Exception as err:
             _LOGGER.error("Unexpected exception: %s", err)
+            _LOGGER.error(traceback.format_exc())
             raise UpdateFailed(f"Unexpected exception: {err}") from err
