@@ -318,17 +318,105 @@ class CSGCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, config_entry_id: str) -> None:
         """Initialize coordinator."""
         self._config_entry_id = config_entry_id
-        config = hass.config_entries.async_get_entry(self._config_entry_id).data
+        self._config = hass.config_entries.async_get_entry(self._config_entry_id).data
         super().__init__(
             hass,
             _LOGGER,
             # Name of the data. For logging purposes.
-            name=f"CSG Account {config[CONF_USERNAME]}",
+            name=f"CSG Account {self._config[CONF_USERNAME]}",
             # Polling interval. Will only be polled if there are subscribers.
             update_interval=timedelta(
-                seconds=config[CONF_SETTINGS][CONF_UPDATE_INTERVAL]
+                seconds=self._config[CONF_SETTINGS][CONF_UPDATE_INTERVAL]
             ),
         )
+
+    async def _refresh_client(self):
+        """Refresh the client."""
+        _LOGGER.debug("Refreshing client")
+        self._client = await self.hass.async_add_executor_job(
+            CSGClient.load,
+            {
+                CONF_AUTH_TOKEN: self._config[CONF_AUTH_TOKEN],
+                CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
+            },
+        )
+        logged_in = await self.hass.async_add_executor_job(
+            self._client.verify_login,
+        )
+        if not logged_in:
+            self._client = await async_refresh_login_and_update_config(
+                self._client, self.hass, self.config_entry
+            )
+            _LOGGER.debug("Client refreshed")
+        else:
+            _LOGGER.debug("Session still valid")
+        await self.hass.async_add_executor_job(self._client.initialize)
+
+    async def _async_fetch(self, func: callable, *args, **kwargs) -> (bool, tuple):
+        try:
+            return True, await self.hass.async_add_executor_job(func, *args, **kwargs)
+        except CSGAPIError as err:
+            _LOGGER.error(
+                "Error fetching data in coordinator: function %s, %s",
+                func.__name__,
+                err,
+            )
+            return False, (func.__name__, err)
+
+    async def fetch_all(self, account: CSGElectricityAccount):
+        data_ret = {}
+        current_dt = datetime.datetime.now()
+        this_year, this_month, this_day = (
+            current_dt.year,
+            current_dt.month,
+            current_dt.day,
+        )
+        last_year, last_month = this_year - 1, this_month - 1
+        if last_month == 0:
+            last_month_ym = (last_year, 12)
+        else:
+            last_month_ym = (this_year, last_month)
+
+        # for last month and last year data, they won't change over a long period of time - so we could use cache
+        #
+        # update policy for last month:
+        # for the first 5 days of a month, update every `update_interval`
+        # for the rest of the time, do not update
+
+        # update policy for last year:
+        # for the first 5 days of Jan, update daily at first update
+        # for the rest of the time, do not update
+        #
+        # when integration is reloaded, all updates will be triggered
+        # so user could just reload the integration to refresh the data if needed
+
+        if (
+            self.hass.data[DOMAIN][self._config_entry_id].get(DATA_KEY_LAST_UPDATE_DAY)
+            is None
+        ):
+            # first update
+            update_last_month = True
+            update_last_year = True
+            _LOGGER.info(
+                "First update for account %s, getting all past data",
+                self._config[CONF_USERNAME],
+            )
+        else:
+            update_last_month = False
+            update_last_year = False
+
+            if this_day <= 5:
+                update_last_month = True
+            today_first_update_triggered = (
+                self.hass.data[DOMAIN][self._config_entry_id][DATA_KEY_LAST_UPDATE_DAY]
+                == this_day
+            )
+            if this_month == 1 and this_day <= 5:
+                if not today_first_update_triggered:
+                    update_last_year = True
+        for account_number, account_data in self._config[CONF_ACCOUNTS].items():
+            account = CSGElectricityAccount.load(account_data)
+            # TODO unfinished
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API endpoint.
