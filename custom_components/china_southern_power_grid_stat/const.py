@@ -47,6 +47,7 @@ SUFFIX_CURRENT_LADDER_TARIFF = "current_ladder_tariff"
 SUFFIX_LAST_YEAR_KWH = "last_year_total_usage"
 SUFFIX_LAST_YEAR_COST = "last_year_total_cost"
 SUFFIX_LAST_MONTH_KWH = "last_month_total_usage"
+SUFFIX_LAST_MONTH_COST = "last_month_total_cost"
 
 ATTR_KEY_THIS_MONTH_BY_DAY = "this_month_by_day"
 ATTR_KEY_THIS_YEAR_BY_MONTH = "this_year_by_month"
