@@ -43,9 +43,9 @@ from .const import (
     CONF_LOGIN_TYPE,
     CONF_SETTINGS,
     CONF_UPDATE_INTERVAL,
-    CONF_UPDATE_TIMEOUT,
     DATA_KEY_LAST_UPDATE_DAY,
     DOMAIN,
+    SETTING_UPDATE_TIMEOUT,
     STATE_UPDATE_UNCHANGED,
     SUFFIX_ARR,
     SUFFIX_BAL,
@@ -749,12 +749,8 @@ class CSGCoordinator(DataUpdateCoordinator):
         try:
             # Note: asyncio.TimeoutError and aiohttp.ClientError are already
             # handled by the data update coordinator.
-            timeout = config[CONF_SETTINGS][CONF_UPDATE_TIMEOUT]
-            if timeout < 60:
-                # temporary workaround
-                _LOGGER.warning("Timeout value too low, setting to 60 seconds")
-                timeout = 60
-            async with async_timeout.timeout(timeout):
+
+            async with async_timeout.timeout(SETTING_UPDATE_TIMEOUT):
                 start_ts = time.time()
                 result = await self.hass.async_add_executor_job(csg_fetch_all)
                 _LOGGER.debug(

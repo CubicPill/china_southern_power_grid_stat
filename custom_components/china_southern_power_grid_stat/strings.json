@@ -39,7 +39,6 @@
         "title": "参数设置",
         "data": {
           "update_interval": "更新间隔（秒）",
-          "update_timeout": "请求超时（秒）"
         }
       }
     },

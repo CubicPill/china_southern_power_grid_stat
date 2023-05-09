@@ -34,9 +34,7 @@ from .const import (
     CONF_SETTINGS,
     CONF_UPDATED_AT,
     CONF_UPDATE_INTERVAL,
-    CONF_UPDATE_TIMEOUT,
     DEFAULT_UPDATE_INTERVAL,
-    DEFAULT_UPDATE_TIMEOUT,
     DOMAIN,
     ERROR_CANNOT_CONNECT,
     ERROR_INVALID_AUTH,
@@ -157,7 +155,6 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_ACCOUNTS: {},
                     CONF_SETTINGS: {
                         CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
-                        CONF_UPDATE_TIMEOUT: DEFAULT_UPDATE_TIMEOUT,
                     },
                     CONF_UPDATED_AT: str(int(time.time() * 1000)),
                 },
@@ -381,14 +378,10 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Settings of parameters"""
         update_interval = self.config_entry.data[CONF_SETTINGS][CONF_UPDATE_INTERVAL]
-        update_timeout = self.config_entry.data[CONF_SETTINGS][CONF_UPDATE_TIMEOUT]
         schema = vol.Schema(
             {
                 vol.Required(CONF_UPDATE_INTERVAL, default=update_interval): vol.All(
                     int, vol.Range(min=60)
-                ),
-                vol.Required(CONF_UPDATE_TIMEOUT, default=update_timeout): vol.All(
-                    int, vol.Range(min=10)
                 ),
             }
         )
@@ -397,7 +390,6 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
 
         new_data = self.config_entry.data.copy()
         new_data[CONF_SETTINGS][CONF_UPDATE_INTERVAL] = user_input[CONF_UPDATE_INTERVAL]
-        new_data[CONF_SETTINGS][CONF_UPDATE_TIMEOUT] = user_input[CONF_UPDATE_TIMEOUT]
         new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
         self.hass.config_entries.async_update_entry(
             self.config_entry,

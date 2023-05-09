@@ -3,15 +3,12 @@ from datetime import timedelta
 
 DOMAIN = "china_southern_power_grid_stat"
 
-STATE_UPDATE_UNCHANGED = "unchanged"
-DATA_KEY_LAST_UPDATE_DAY = "last_update_day"
-
+# config flow
 CONF_ACCOUNT_NUMBER = "account_number"
 CONF_LOGIN_TYPE = "login_type"
 CONF_AUTH_TOKEN = "auth_token"
 CONF_ACCOUNTS = "accounts"
 CONF_UPDATE_INTERVAL = "update_interval"
-CONF_UPDATE_TIMEOUT = "update_timeout"
 CONF_SETTINGS = "settings"
 CONF_UPDATED_AT = "updated_at"
 CONF_ACTION = "action"
@@ -31,11 +28,10 @@ ERROR_CANNOT_CONNECT = "cannot_connect"
 ERROR_INVALID_AUTH = "invalid_auth"
 ERROR_UNKNOWN = "unknown"
 
+# api
 VALUE_CSG_LOGIN_TYPE_PWD = "10"
 
-DEFAULT_UPDATE_INTERVAL = timedelta(hours=4).seconds
-DEFAULT_UPDATE_TIMEOUT = 60
-
+# sensor updates
 SUFFIX_BAL = "balance"
 SUFFIX_ARR = "arrears"
 SUFFIX_YESTERDAY_KWH = "yesterday_kwh"
@@ -58,3 +54,12 @@ ATTR_KEY_LAST_MONTH_BY_DAY = "last_month_by_day"
 ATTR_KEY_LAST_YEAR_BY_MONTH = "last_year_by_month"
 ATTR_KEY_LATEST_DAY_DATE = "latest_day_date"
 ATTR_KEY_CURRENT_LADDER_START_DATE = "current_ladder_start_date"
+
+STATE_UPDATE_UNCHANGED = "unchanged"
+DATA_KEY_LAST_UPDATE_DAY = "last_update_day"
+
+# settings
+SETTING_UPDATE_TIMEOUT = 60
+
+# defaults
+DEFAULT_UPDATE_INTERVAL = timedelta(hours=4).seconds
