@@ -63,6 +63,10 @@ DATA_KEY_LAST_UPDATE_DAY = "last_update_day"
 
 # currently, this timeout is for each request, user should not need to set it manually
 SETTING_UPDATE_TIMEOUT = 60
+# the first n days in a month that will get data of last month
+SETTING_LAST_MONTH_UPDATE_DAY_THRESHOLD = 3
+# the first n days in a year that will get data of last year
+SETTING_LAST_YEAR_UPDATE_DAY_THRESHOLD = 7
 
 # defaults
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=4).seconds

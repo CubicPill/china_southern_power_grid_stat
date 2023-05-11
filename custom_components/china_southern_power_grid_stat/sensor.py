@@ -44,6 +44,8 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     DATA_KEY_LAST_UPDATE_DAY,
     DOMAIN,
+    SETTING_LAST_MONTH_UPDATE_DAY_THRESHOLD,
+    SETTING_LAST_YEAR_UPDATE_DAY_THRESHOLD,
     SETTING_UPDATE_TIMEOUT,
     STATE_UPDATE_UNCHANGED,
     SUFFIX_ARR,
@@ -171,6 +173,13 @@ async def async_setup_entry(
                 coordinator,
                 account_number,
                 SUFFIX_LAST_MONTH_KWH,
+                extra_state_attributes_key=ATTR_KEY_LAST_MONTH_BY_DAY,
+            ),
+            # last month's total cost, with extra attributes about daily usage
+            CSGCostSensor(
+                coordinator,
+                account_number,
+                SUFFIX_LAST_MONTH_COST,
                 extra_state_attributes_key=ATTR_KEY_LAST_MONTH_BY_DAY,
             ),
         ]
@@ -332,6 +341,7 @@ class CSGCoordinator(DataUpdateCoordinator):
         self._client: CSGClient | None = None
         self._if_update_last_month = True
         self._if_update_last_year = True
+        self._this_day = None
         self._this_year = None
         self._this_month_ym = None
         self._last_year = None
@@ -488,7 +498,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                 ATTR_KEY_LAST_YEAR_BY_MONTH: STATE_UPDATE_UNCHANGED
             }
             _LOGGER.debug(
-                "Updated last year's data for account %s: no need to update",
+                "Last year's data for account %s: no need to update",
                 account.account_number,
             )
             return
@@ -675,6 +685,10 @@ class CSGCoordinator(DataUpdateCoordinator):
 
             if not self._if_update_last_month:
                 # don't need last month's data for latest day
+                _LOGGER.debug(
+                    "Last month's data for account %s: no need to update",
+                    account.account_number,
+                )
                 self._gathered_data[account.account_number][
                     SUFFIX_LAST_MONTH_KWH
                 ] = STATE_UPDATE_UNCHANGED
@@ -711,16 +725,16 @@ class CSGCoordinator(DataUpdateCoordinator):
 
         if success_cost:
             (
-                this_month_cost,
-                this_month_kwh_from_cost,
+                last_month_cost,
+                last_month_kwh_from_cost,
                 _,  # ladder is discarded
                 this_month_by_day_from_cost,
             ) = result_cost
 
         else:
             (
-                this_month_cost,
-                this_month_kwh_from_cost,
+                last_month_cost,
+                last_month_kwh_from_cost,
                 this_month_by_day_from_cost,
             ) = (
                 STATE_UNAVAILABLE,
@@ -731,7 +745,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             by_day_from_usage=last_month_by_day_from_usage,
             kwh_from_usage=last_month_kwh_from_usage,
             by_day_from_cost=this_month_by_day_from_cost,
-            kwh_from_cost=this_month_kwh_from_cost,
+            kwh_from_cost=last_month_kwh_from_cost,
         )
 
         self._gathered_data[account.account_number][
@@ -739,7 +753,7 @@ class CSGCoordinator(DataUpdateCoordinator):
         ] = last_month_kwh
         self._gathered_data[account.account_number][
             SUFFIX_LAST_MONTH_COST
-        ] = this_month_cost
+        ] = last_month_cost
         self._gathered_data[account.account_number][ATTR_KEY_LAST_MONTH_BY_DAY] = {
             ATTR_KEY_LAST_MONTH_BY_DAY: last_month_by_day
         }
@@ -809,6 +823,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             last_month_ym = (last_year, 12)
         else:
             last_month_ym = (this_year, last_month)
+        self._this_day = this_day
         self._this_year = this_year
         self._this_month_ym = (this_year, this_month)
         self._last_year = last_year
@@ -817,11 +832,11 @@ class CSGCoordinator(DataUpdateCoordinator):
         # for last month and last year data, they won't change over a long period of time - so we could use cache
         #
         # update policy for last month:
-        # for the first 5 days of a month, update every `update_interval`
+        # for the first <LAST_MONTH_UPDATE_DAY_THRESHOLD> days of a month, update every `update_interval`
         # for the rest of the time, do not update
 
         # update policy for last year:
-        # for the first 5 days of Jan, update daily at first update
+        # for the first <LAST_YEAR_UPDATE_DAY_THRESHOLD> days of Jan, update daily at first update
         # for the rest of the time, do not update
         #
         # when integration is reloaded, all updates will be triggered
@@ -842,13 +857,13 @@ class CSGCoordinator(DataUpdateCoordinator):
             update_last_month = False
             update_last_year = False
 
-            if this_day <= 5:
+            if this_day <= SETTING_LAST_MONTH_UPDATE_DAY_THRESHOLD:
                 update_last_month = True
             today_first_update_triggered = (
                 self.hass.data[DOMAIN][self._config_entry_id][DATA_KEY_LAST_UPDATE_DAY]
                 == this_day
             )
-            if this_month == 1 and this_day <= 5:
+            if this_month == 1 and this_day <= SETTING_LAST_YEAR_UPDATE_DAY_THRESHOLD:
                 if not today_first_update_triggered:
                     update_last_year = True
         self._if_update_last_month = update_last_month
@@ -901,4 +916,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             account = CSGElectricityAccount.load(account_data)
             await self._async_update_account_data(account)
         _LOGGER.debug("Coordinator update took %s seconds", time.time() - start_time)
+        self.hass.data[DOMAIN][self._config_entry_id][
+            DATA_KEY_LAST_UPDATE_DAY
+        ] = self._this_day
         return self._gathered_data

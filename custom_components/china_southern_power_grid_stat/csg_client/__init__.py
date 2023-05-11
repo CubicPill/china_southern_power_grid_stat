@@ -602,14 +602,18 @@ class CSGClient:
             month_total_cost = float(resp_data["totalElectricity"])
         else:
             _LOGGER.warning(
-                "Value of totalElectricity is None, calculating from daily data"
+                "Function get_month_daily_cost_detail %s: Value of totalElectricity is None, calculate from daily data",
+                year_month,
             )
             month_total_cost = sum(d["cost"] for d in by_day)
 
         if resp_data["totalPower"] is not None:
             month_total_kwh = float(resp_data["totalPower"])
         else:
-            _LOGGER.warning("Value of totalPower is None, calculating from daily data")
+            _LOGGER.warning(
+                "Function get_month_daily_cost_detail %s: Value of totalPower is None, calculate from daily data",
+                year_month,
+            )
             month_total_kwh = sum(d["kwh"] for d in by_day)
 
         # sometimes the ladder info is null, handle that
