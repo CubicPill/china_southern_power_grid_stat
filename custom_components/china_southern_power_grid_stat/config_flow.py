@@ -21,11 +21,31 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry, entity_registry
 from requests import RequestException
 
-from .const import (ABORT_ALL_ADDED, ABORT_NO_ACCOUNT, ABORT_NO_ACCOUNT_TO_DELETE, CONF_ACCOUNT_NUMBER, CONF_ACTION,
-                    CONF_AUTH_TOKEN, CONF_ELE_ACCOUNTS, CONF_GENERAL_ERROR, CONF_LOGIN_TYPE, CONF_SETTINGS,
-                    CONF_UPDATED_AT, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN, ERROR_CANNOT_CONNECT,
-                    ERROR_INVALID_AUTH, ERROR_UNKNOWN, STEP_ADD_ACCOUNT, STEP_INIT, STEP_REMOVE_ACCOUNT, STEP_SETTINGS,
-                    STEP_USER, VALUE_CSG_LOGIN_TYPE_PWD)
+from .const import (
+    ABORT_ALL_ADDED,
+    ABORT_NO_ACCOUNT,
+    ABORT_NO_ACCOUNT_TO_DELETE,
+    CONF_ACCOUNT_NUMBER,
+    CONF_ACTION,
+    CONF_AUTH_TOKEN,
+    CONF_ELE_ACCOUNTS,
+    CONF_GENERAL_ERROR,
+    CONF_LOGIN_TYPE,
+    CONF_SETTINGS,
+    CONF_UPDATED_AT,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    ERROR_CANNOT_CONNECT,
+    ERROR_INVALID_AUTH,
+    ERROR_UNKNOWN,
+    STEP_ADD_ACCOUNT,
+    STEP_INIT,
+    STEP_REMOVE_ACCOUNT,
+    STEP_SETTINGS,
+    STEP_USER,
+    VALUE_CSG_LOGIN_TYPE_PWD,
+)
 from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
 
 _LOGGER = logging.getLogger(__name__)

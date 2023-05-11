@@ -591,7 +591,7 @@ class CSGClient:
             by_day.append(
                 {
                     "date": d_data["date"],
-                    "cost": float(d_data["charge"]),
+                    "charge": float(d_data["charge"]),
                     "kwh": float(d_data["power"]),
                 }
             )
@@ -605,7 +605,7 @@ class CSGClient:
                 "Function get_month_daily_cost_detail %s: Value of totalElectricity is None, calculate from daily data",
                 year_month,
             )
-            month_total_cost = sum(d["cost"] for d in by_day)
+            month_total_cost = sum(d["charge"] for d in by_day)
 
         if resp_data["totalPower"] is not None:
             month_total_kwh = float(resp_data["totalPower"])
