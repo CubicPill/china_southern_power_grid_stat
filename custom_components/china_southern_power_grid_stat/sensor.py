@@ -30,42 +30,15 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
-from .const import (
-    ATTR_KEY_CURRENT_LADDER_START_DATE,
-    ATTR_KEY_LAST_MONTH_BY_DAY,
-    ATTR_KEY_LAST_YEAR_BY_MONTH,
-    ATTR_KEY_LATEST_DAY_DATE,
-    ATTR_KEY_THIS_MONTH_BY_DAY,
-    ATTR_KEY_THIS_YEAR_BY_MONTH,
-    CONF_ACCOUNTS,
-    CONF_AUTH_TOKEN,
-    CONF_LOGIN_TYPE,
-    CONF_SETTINGS,
-    CONF_UPDATE_INTERVAL,
-    DATA_KEY_LAST_UPDATE_DAY,
-    DOMAIN,
-    SETTING_LAST_MONTH_UPDATE_DAY_THRESHOLD,
-    SETTING_LAST_YEAR_UPDATE_DAY_THRESHOLD,
-    SETTING_UPDATE_TIMEOUT,
-    STATE_UPDATE_UNCHANGED,
-    SUFFIX_ARR,
-    SUFFIX_BAL,
-    SUFFIX_CURRENT_LADDER,
-    SUFFIX_CURRENT_LADDER_REMAINING_KWH,
-    SUFFIX_CURRENT_LADDER_TARIFF,
-    SUFFIX_LAST_MONTH_COST,
-    SUFFIX_LAST_MONTH_KWH,
-    SUFFIX_LAST_YEAR_COST,
-    SUFFIX_LAST_YEAR_KWH,
-    SUFFIX_LATEST_DAY_COST,
-    SUFFIX_LATEST_DAY_KWH,
-    SUFFIX_THIS_MONTH_COST,
-    SUFFIX_THIS_MONTH_KWH,
-    SUFFIX_THIS_YEAR_COST,
-    SUFFIX_THIS_YEAR_KWH,
-    SUFFIX_YESTERDAY_KWH,
-    VALUE_CSG_LOGIN_TYPE_PWD,
-)
+from .const import (ATTR_KEY_CURRENT_LADDER_START_DATE, ATTR_KEY_LAST_MONTH_BY_DAY, ATTR_KEY_LAST_YEAR_BY_MONTH,
+                    ATTR_KEY_LATEST_DAY_DATE, ATTR_KEY_THIS_MONTH_BY_DAY, ATTR_KEY_THIS_YEAR_BY_MONTH, CONF_AUTH_TOKEN,
+                    CONF_ELE_ACCOUNTS, CONF_LOGIN_TYPE, CONF_SETTINGS, CONF_UPDATE_INTERVAL, DATA_KEY_LAST_UPDATE_DAY,
+                    DOMAIN, SETTING_LAST_MONTH_UPDATE_DAY_THRESHOLD, SETTING_LAST_YEAR_UPDATE_DAY_THRESHOLD,
+                    SETTING_UPDATE_TIMEOUT, STATE_UPDATE_UNCHANGED, SUFFIX_ARR, SUFFIX_BAL, SUFFIX_CURRENT_LADDER,
+                    SUFFIX_CURRENT_LADDER_REMAINING_KWH, SUFFIX_CURRENT_LADDER_TARIFF, SUFFIX_LAST_MONTH_COST,
+                    SUFFIX_LAST_MONTH_KWH, SUFFIX_LAST_YEAR_COST, SUFFIX_LAST_YEAR_KWH, SUFFIX_LATEST_DAY_COST,
+                    SUFFIX_LATEST_DAY_KWH, SUFFIX_THIS_MONTH_COST, SUFFIX_THIS_MONTH_KWH, SUFFIX_THIS_YEAR_COST,
+                    SUFFIX_THIS_YEAR_KWH, SUFFIX_YESTERDAY_KWH, VALUE_CSG_LOGIN_TYPE_PWD)
 from .csg_client import (
     CSGAPIError,
     CSGClient,
@@ -83,102 +56,104 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ):
     """Setup sensors from a config entry created in the integrations UI."""
-    if not config_entry.data[CONF_ACCOUNTS]:
+    if not config_entry.data[CONF_ELE_ACCOUNTS]:
         _LOGGER.info("No ele accounts in config, exit entry setup")
         return
     coordinator = CSGCoordinator(hass, config_entry.entry_id)
 
     all_sensors = []
-    for account_number, _ in config_entry.data[CONF_ACCOUNTS].items():
+    for ele_account_number, _ in config_entry.data[CONF_ELE_ACCOUNTS].items():
         sensors = [
             # balance
-            CSGCostSensor(coordinator, account_number, SUFFIX_BAL),
+            CSGCostSensor(coordinator, ele_account_number, SUFFIX_BAL),
             # arrears
-            CSGCostSensor(coordinator, account_number, SUFFIX_ARR),
+            CSGCostSensor(coordinator, ele_account_number, SUFFIX_ARR),
             # yesterday kwh
             CSGEnergySensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_YESTERDAY_KWH,
             ),
             # latest day usage that is available, with extra attributes about the date
             CSGEnergySensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_LATEST_DAY_KWH,
                 extra_state_attributes_key=ATTR_KEY_LATEST_DAY_DATE,
             ),
             # latest day cost that is available, with extra attributes about the date
             CSGCostSensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_LATEST_DAY_COST,
                 extra_state_attributes_key=ATTR_KEY_LATEST_DAY_DATE,
             ),
             # this year's total energy, with extra attributes about monthly usage
             CSGEnergySensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_THIS_YEAR_KWH,
                 extra_state_attributes_key=ATTR_KEY_THIS_YEAR_BY_MONTH,
             ),
             # this year's total cost
             CSGCostSensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_THIS_YEAR_COST,
             ),
             # this month's total energy, with extra attributes about daily usage
             CSGEnergySensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_THIS_MONTH_KWH,
                 extra_state_attributes_key=ATTR_KEY_THIS_MONTH_BY_DAY,
             ),
             # this month's total cost, with extra attributes about daily usage
             CSGCostSensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_THIS_MONTH_COST,
                 extra_state_attributes_key=ATTR_KEY_THIS_MONTH_BY_DAY,
             ),
             # current ladder, with extra attributes about start date
             CSGLadderStageSensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_CURRENT_LADDER,
                 extra_state_attributes_key=ATTR_KEY_CURRENT_LADDER_START_DATE,
             ),
             # current ladder remaining kwh
             CSGEnergySensor(
-                coordinator, account_number, SUFFIX_CURRENT_LADDER_REMAINING_KWH
+                coordinator, ele_account_number, SUFFIX_CURRENT_LADDER_REMAINING_KWH
             ),
             # current ladder tariff
-            CSGCostSensor(coordinator, account_number, SUFFIX_CURRENT_LADDER_TARIFF),
+            CSGCostSensor(
+                coordinator, ele_account_number, SUFFIX_CURRENT_LADDER_TARIFF
+            ),
             # last year's total energy, with extra attributes about monthly usage
             CSGEnergySensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_LAST_YEAR_KWH,
                 extra_state_attributes_key=ATTR_KEY_LAST_YEAR_BY_MONTH,
             ),
             # last year's total cost
             CSGCostSensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_LAST_YEAR_COST,
             ),
             # last month's total energy, with extra attributes about daily usage
             CSGEnergySensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_LAST_MONTH_KWH,
                 extra_state_attributes_key=ATTR_KEY_LAST_MONTH_BY_DAY,
             ),
             # last month's total cost, with extra attributes about daily usage
             CSGCostSensor(
                 coordinator,
-                account_number,
+                ele_account_number,
                 SUFFIX_LAST_MONTH_COST,
                 extra_state_attributes_key=ATTR_KEY_LAST_MONTH_BY_DAY,
             ),
@@ -911,7 +886,7 @@ class CSGCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Coordinator update started")
         start_time = time.time()
         await self._async_refresh_client()
-        for account_number, account_data in self._config[CONF_ACCOUNTS].items():
+        for account_number, account_data in self._config[CONF_ELE_ACCOUNTS].items():
             self._gathered_data[account_number] = {}
             account = CSGElectricityAccount.load(account_data)
             await self._async_update_account_data(account)

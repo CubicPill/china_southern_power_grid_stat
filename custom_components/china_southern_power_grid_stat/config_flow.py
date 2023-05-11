@@ -21,31 +21,11 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry, entity_registry
 from requests import RequestException
 
-from .const import (
-    ABORT_ALL_ADDED,
-    ABORT_NO_ACCOUNT,
-    ABORT_NO_ACCOUNT_TO_DELETE,
-    CONF_ACCOUNTS,
-    CONF_ACCOUNT_NUMBER,
-    CONF_ACTION,
-    CONF_AUTH_TOKEN,
-    CONF_GENERAL_ERROR,
-    CONF_LOGIN_TYPE,
-    CONF_SETTINGS,
-    CONF_UPDATED_AT,
-    CONF_UPDATE_INTERVAL,
-    DEFAULT_UPDATE_INTERVAL,
-    DOMAIN,
-    ERROR_CANNOT_CONNECT,
-    ERROR_INVALID_AUTH,
-    ERROR_UNKNOWN,
-    STEP_ADD_ACCOUNT,
-    STEP_INIT,
-    STEP_REMOVE_ACCOUNT,
-    STEP_SETTINGS,
-    STEP_USER,
-    VALUE_CSG_LOGIN_TYPE_PWD,
-)
+from .const import (ABORT_ALL_ADDED, ABORT_NO_ACCOUNT, ABORT_NO_ACCOUNT_TO_DELETE, CONF_ACCOUNT_NUMBER, CONF_ACTION,
+                    CONF_AUTH_TOKEN, CONF_ELE_ACCOUNTS, CONF_GENERAL_ERROR, CONF_LOGIN_TYPE, CONF_SETTINGS,
+                    CONF_UPDATED_AT, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN, ERROR_CANNOT_CONNECT,
+                    ERROR_INVALID_AUTH, ERROR_UNKNOWN, STEP_ADD_ACCOUNT, STEP_INIT, STEP_REMOVE_ACCOUNT, STEP_SETTINGS,
+                    STEP_USER, VALUE_CSG_LOGIN_TYPE_PWD)
 from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
 
 _LOGGER = logging.getLogger(__name__)
@@ -152,7 +132,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_USERNAME: user_input[CONF_USERNAME],
                     CONF_PASSWORD: user_input[CONF_PASSWORD],
                     CONF_AUTH_TOKEN: session_data[CONF_AUTH_TOKEN],
-                    CONF_ACCOUNTS: {},
+                    CONF_ELE_ACCOUNTS: {},
                     CONF_SETTINGS: {
                         CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                     },
@@ -224,14 +204,14 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         # get a list of all account numbers from all config entries
         all_account_numbers = []
         for config_entry in all_csg_config_entries:
-            all_account_numbers.extend(config_entry.data[CONF_ACCOUNTS].keys())
+            all_account_numbers.extend(config_entry.data[CONF_ELE_ACCOUNTS].keys())
         if user_input:
             account_num_to_add = user_input[CONF_ACCOUNT_NUMBER]
             for account in self.all_electricity_accounts:
                 if account.account_number == account_num_to_add:
                     # store the account config in main entry instead of creating new entries
                     new_data = self.config_entry.data.copy()
-                    new_data[CONF_ACCOUNTS][account_num_to_add] = account.dump()
+                    new_data[CONF_ELE_ACCOUNTS][account_num_to_add] = account.dump()
                     # this must be set or update won't be detected
                     new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
                     self.hass.config_entries.async_update_entry(
@@ -308,11 +288,11 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """remove config and entities"""
-        if not self.config_entry.data[CONF_ACCOUNTS]:
+        if not self.config_entry.data[CONF_ELE_ACCOUNTS]:
             return self.async_abort(reason=ABORT_NO_ACCOUNT_TO_DELETE)
 
         selections = {}
-        for _, account_data in self.config_entry.data[CONF_ACCOUNTS].items():
+        for _, account_data in self.config_entry.data[CONF_ELE_ACCOUNTS].items():
             account = CSGElectricityAccount.load(account_data)
             selections[
                 account.account_number
@@ -354,7 +334,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
             _LOGGER.info("Removed device: %s", device_removed)
 
         new_data = self.config_entry.data.copy()
-        new_data[CONF_ACCOUNTS].pop(account_num_to_remove)
+        new_data[CONF_ELE_ACCOUNTS].pop(account_num_to_remove)
         new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
         self.hass.config_entries.async_update_entry(
             self.config_entry,

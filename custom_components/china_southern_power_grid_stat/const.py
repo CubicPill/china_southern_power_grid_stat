@@ -4,10 +4,12 @@ from datetime import timedelta
 DOMAIN = "china_southern_power_grid_stat"
 
 # config flow
+# main account (phone number)
 CONF_ACCOUNT_NUMBER = "account_number"
 CONF_LOGIN_TYPE = "login_type"
 CONF_AUTH_TOKEN = "auth_token"
-CONF_ACCOUNTS = "accounts"
+# electricity accounts
+CONF_ELE_ACCOUNTS = "accounts"
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_SETTINGS = "settings"
 CONF_UPDATED_AT = "updated_at"
