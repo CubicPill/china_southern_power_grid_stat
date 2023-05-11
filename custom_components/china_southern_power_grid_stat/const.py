@@ -60,6 +60,8 @@ STATE_UPDATE_UNCHANGED = "unchanged"
 DATA_KEY_LAST_UPDATE_DAY = "last_update_day"
 
 # settings
+
+# currently, this timeout is for each request, user should not need to set it manually
 SETTING_UPDATE_TIMEOUT = 60
 
 # defaults
