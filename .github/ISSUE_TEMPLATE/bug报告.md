@@ -1,6 +1,6 @@
 ---
-name: Bug report
-about: Create a report to help us improve
+name: Bug报告
+about: 报告插件bug
 title: "[BUG]"
 labels: ''
 assignees: CubicPill
