@@ -779,7 +779,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             if this_month_by_day != STATE_UNAVAILABLE and len(this_month_by_day) >= 1:
                 # we have this month's data, use the latest day
                 latest_day_kwh = this_month_by_day[-1]["kwh"]
-                latest_day_cost = this_month_by_day[-1].get("cost") or STATE_UNKNOWN
+                latest_day_cost = this_month_by_day[-1].get("charge") or STATE_UNKNOWN
                 latest_day_date = this_month_by_day[-1]["date"]
             else:
                 # this month isn't available yet (typically during the first 3 days)
