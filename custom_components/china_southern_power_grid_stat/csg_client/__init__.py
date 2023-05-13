@@ -193,13 +193,13 @@ class CSGClient:
             "Host": "95598.csg.cn",
             "Content-Type": "application/json;charset=utf-8",
             "Origin": "file://",
-            "x-auth-token": "",
+            HEADER_X_AUTH_TOKEN: "",
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Accept": "application/json, text/plain, */*",
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
             "AppleWebKit/605.1.15 (KHTML, like Gecko)",
-            "custNumber": "",
+            HEADER_CUST_NUMBER: "",
             "Accept-Language": "zh-CN,cn;q=0.9",
         }
 
@@ -254,9 +254,14 @@ class CSGClient:
             api_path,
             response_data,
         )
-        if response_data["sta"] == RESP_STA_NO_LOGIN:
-            raise NotLoggedIn(response_data["sta"], response_data.get("message"))
-        raise CSGAPIError(response_data["sta"], response_data.get("message"))
+
+        if response_data[JSON_KEY_STA] == RESP_STA_NO_LOGIN:
+            raise NotLoggedIn(
+                response_data[JSON_KEY_STA], response_data.get(JSON_KEY_MESSAGE)
+            )
+        raise CSGAPIError(
+            response_data[JSON_KEY_STA], response_data.get(JSON_KEY_MESSAGE)
+        )
 
     # end internal utility functions
 
@@ -265,13 +270,13 @@ class CSGClient:
         """Send SMS verification code to phone_no"""
         path = "center/sendMsg"
         payload = {
-            "areaCode": AREACODE_FALLBACK,
+            JSON_KEY_AREA_CODE: AREACODE_FALLBACK,
             "phoneNumber": phone_no,
             "vcType": VERIFICATION_CODE_TYPE_LOGIN,
             "msgType": SEND_MSG_TYPE_VERIFICATION_CODE,
         }
         _, resp_data = self._make_request(path, payload, with_auth=False)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
             return True
         self._handle_unsuccessful_response(path, resp_data)
 
@@ -279,37 +284,39 @@ class CSGClient:
         """Login with phone number and SMS code"""
         path = "center/login"
         payload = {
-            "areaCode": AREACODE_FALLBACK,
-            "acctId": phone_no,
-            "logonChan": LOGON_CHANNEL_HANDHELD_HALL,
-            "credType": LOGIN_TYPE_PHONE_CODE,
+            JSON_KEY_AREA_CODE: AREACODE_FALLBACK,
+            JSON_KEY_ACCT_ID: phone_no,
+            JSON_KEY_LOGON_CHAN: LOGON_CHANNEL_HANDHELD_HALL,
+            JSON_KEY_CRED_TYPE: LOGIN_TYPE_PHONE_CODE,
             "code": code,
         }
         resp_header, resp_data = self._make_request(
             path, payload, with_auth=False, custom_headers={"need-crypto": "true"}
         )
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_header["x-auth-token"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_header[HEADER_X_AUTH_TOKEN]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_login_with_password(self, phone_no: str, password: str):
         """Login with phone number and password"""
         path = "center/login"
         payload = {
-            "areaCode": AREACODE_FALLBACK,
-            "acctId": phone_no,
-            "logonChan": LOGON_CHANNEL_HANDHELD_HALL,
-            "credType": LOGIN_TYPE_PHONE_PWD,
+            JSON_KEY_AREA_CODE: AREACODE_FALLBACK,
+            JSON_KEY_ACCT_ID: phone_no,
+            JSON_KEY_LOGON_CHAN: LOGON_CHANNEL_HANDHELD_HALL,
+            JSON_KEY_CRED_TYPE: LOGIN_TYPE_PHONE_PWD,
             "credentials": encrypt_credential(password),
         }
         payload = {"param": encrypt_params(payload)}
         resp_header, resp_data = self._make_request(
             path, payload, with_auth=False, custom_headers={"need-crypto": "true"}
         )
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_header["x-auth-token"]
-        if resp_data["sta"] == RESP_STA_LOGIN_WRONG_CREDENTIAL:
-            raise InvalidCredentials(resp_data["sta"], resp_data.get("message"))
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_header[HEADER_X_AUTH_TOKEN]
+        if resp_data[JSON_KEY_STA] == RESP_STA_LOGIN_WRONG_CREDENTIAL:
+            raise InvalidCredentials(
+                resp_data[JSON_KEY_STA], resp_data.get(JSON_KEY_MESSAGE)
+            )
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_authentication_result(self) -> dict[str, Any]:
@@ -317,8 +324,8 @@ class CSGClient:
         path = "user/queryAuthenticationResult"
         payload = None
         _, resp_data = self._make_request(path, payload)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_get_user_info(self) -> dict[str, Any]:
@@ -326,17 +333,19 @@ class CSGClient:
         path = "user/getUserInfo"
         payload = None
         _, resp_data = self._make_request(path, payload)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_get_all_linked_electricity_accounts(self) -> list[dict[str, Any]]:
         """List all linked electricity accounts under this account"""
         path = "eleCustNumber/queryBindEleUsers"
         _, resp_data = self._make_request(path, {})
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            _LOGGER.debug("Total %d users under this account", len(resp_data["data"]))
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            _LOGGER.debug(
+                "Total %d users under this account", len(resp_data[JSON_KEY_DATA])
+            )
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_get_metering_point(
@@ -347,15 +356,15 @@ class CSGClient:
         """Get metering point id"""
         path = "charge/queryMeteringPoint"
         payload = {
-            "areaCode": area_code,
+            JSON_KEY_AREA_CODE: area_code,
             "eleCustNumberList": [
-                {"eleCustId": ele_customer_id, "areaCode": area_code}
+                {JSON_KEY_ELE_CUST_ID: ele_customer_id, JSON_KEY_AREA_CODE: area_code}
             ],
         }
         custom_headers = {"funid": "100t002"}
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_day_electric_by_m_point(
@@ -369,15 +378,15 @@ class CSGClient:
         """get usage(kWh) by day in the given month"""
         path = "charge/queryDayElectricByMPoint"
         payload = {
-            "areaCode": area_code,
-            "eleCustId": ele_customer_id,
-            "yearMonth": f"{year}{month:02d}",
-            "meteringPointId": metering_point_id,
+            JSON_KEY_AREA_CODE: area_code,
+            JSON_KEY_ELE_CUST_ID: ele_customer_id,
+            JSON_KEY_YEAR_MONTH: f"{year}{month:02d}",
+            JSON_KEY_METERING_POINT_ID: metering_point_id,
         }
         custom_headers = {"funid": "100t002"}
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_day_electric_charge_by_m_point(
@@ -394,24 +403,24 @@ class CSGClient:
         """
         path = "charge/queryDayElectricChargeByMPoint"
         payload = {
-            "areaCode": area_code,
-            "eleCustId": ele_customer_id,
-            "yearMonth": f"{year}{month:02d}",
-            "meteringPointId": metering_point_id,
+            JSON_KEY_AREA_CODE: area_code,
+            JSON_KEY_ELE_CUST_ID: ele_customer_id,
+            JSON_KEY_YEAR_MONTH: f"{year}{month:02d}",
+            JSON_KEY_METERING_POINT_ID: metering_point_id,
         }
         custom_headers = {"funid": "100t002"}
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_account_surplus(self, area_code: str, ele_customer_id: str):
         """Contains: balance and arrears"""
         path = "charge/queryUserAccountNumberSurplus"
-        payload = {"areaCode": area_code, "eleCustId": ele_customer_id}
+        payload = {JSON_KEY_AREA_CODE: area_code, JSON_KEY_ELE_CUST_ID: ele_customer_id}
         _, resp_data = self._make_request(path, payload)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_get_fee_analyze_details(
@@ -422,14 +431,14 @@ class CSGClient:
         """
         path = "charge/getAnalyzeFeeDetails"
         payload = {
-            "areaCode": area_code,
+            JSON_KEY_AREA_CODE: area_code,
             "electricityBillYear": year,
-            "eleCustId": ele_customer_id,
-            "meteringPointId": None,  # this is set to null in api
+            JSON_KEY_ELE_CUST_ID: ele_customer_id,
+            JSON_KEY_METERING_POINT_ID: None,  # this is set to null in api
         }
         _, resp_data = self._make_request(path, payload)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_day_electric_by_m_point_yesterday(
@@ -439,32 +448,34 @@ class CSGClient:
     ) -> dict:
         """Contains: power consumption(kWh) of yesterday"""
         path = "charge/queryDayElectricByMPointYesterday"
-        payload = {"eleCustId": ele_customer_id, "areaCode": area_code}
+        payload = {JSON_KEY_ELE_CUST_ID: ele_customer_id, JSON_KEY_AREA_CODE: area_code}
         _, resp_data = self._make_request(path, payload)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_query_charges(self, area_code: str, ele_customer_id: str, _type="0"):
         """Contains: balance and arrears, metering points"""
         path = "charge/queryCharges"
         payload = {
-            "areaCode": area_code,
-            "eleModels": [{"eleCustId": ele_customer_id, "areaCode": area_code}],
+            JSON_KEY_AREA_CODE: area_code,
+            "eleModels": [
+                {JSON_KEY_ELE_CUST_ID: ele_customer_id, JSON_KEY_AREA_CODE: area_code}
+            ],
             "type": _type,
         }
         _, resp_data = self._make_request(path, payload)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     def api_logout(self, logon_chan: str, cred_type) -> None:
         """logout"""
         path = "center/logout"
-        payload = {"logonChan": logon_chan, "credType": cred_type}
+        payload = {JSON_KEY_LOGON_CHAN: logon_chan, JSON_KEY_CRED_TYPE: cred_type}
         _, resp_data = self._make_request(path, payload)
-        if resp_data["sta"] == RESP_STA_SUCCESS:
-            return resp_data["data"]
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
     # end raw api functions
@@ -509,7 +520,7 @@ class CSGClient:
     def initialize(self):
         """Initialize the client"""
         resp_data = self.api_get_user_info()
-        self.customer_number = resp_data["custNumber"]
+        self.customer_number = resp_data[JSON_KEY_CUST_NUMBER]
 
     def verify_login(self) -> bool:
         """Verify validity of the session"""
@@ -537,12 +548,12 @@ class CSGClient:
 
         for item in ele_user_resp_data:
             metering_point_data = self.api_get_metering_point(
-                item["areaCode"], item["bindingId"]
+                item[JSON_KEY_AREA_CODE], item["bindingId"]
             )
-            metering_point_id = metering_point_data[0]["meteringPointId"]
+            metering_point_id = metering_point_data[0][JSON_KEY_METERING_POINT_ID]
             account = CSGElectricityAccount(
                 item["eleCustNumber"],
-                item["areaCode"],
+                item[JSON_KEY_AREA_CODE],
                 item["bindingId"],
                 metering_point_id,
                 item["eleAddress"],
@@ -568,7 +579,9 @@ class CSGClient:
         month_total_kwh = float(resp_data["totalPower"])
         by_day = []
         for d_data in resp_data["result"]:
-            by_day.append({"date": d_data["date"], "kwh": float(d_data["power"])})
+            by_day.append(
+                {WF_ATTR_DATE: d_data["date"], WF_ATTR_KWH: float(d_data["power"])}
+            )
         return month_total_kwh, by_day
 
     def get_month_daily_cost_detail(
@@ -590,9 +603,9 @@ class CSGClient:
         for d_data in resp_data["result"]:
             by_day.append(
                 {
-                    "date": d_data["date"],
-                    "charge": float(d_data["charge"]),
-                    "kwh": float(d_data["power"]),
+                    WF_ATTR_DATE: d_data["date"],
+                    WF_ATTR_CHARGE: float(d_data["charge"]),
+                    WF_ATTR_KWH: float(d_data["power"]),
                 }
             )
 
@@ -605,7 +618,7 @@ class CSGClient:
                 "Function get_month_daily_cost_detail %s: Value of totalElectricity is None, calculate from daily data",
                 year_month,
             )
-            month_total_cost = sum(d["charge"] for d in by_day)
+            month_total_cost = sum(d[WF_ATTR_CHARGE] for d in by_day)
 
         if resp_data["totalPower"] is not None:
             month_total_kwh = float(resp_data["totalPower"])
@@ -614,7 +627,7 @@ class CSGClient:
                 "Function get_month_daily_cost_detail %s: Value of totalPower is None, calculate from daily data",
                 year_month,
             )
-            month_total_kwh = sum(d["kwh"] for d in by_day)
+            month_total_kwh = sum(d[WF_ATTR_KWH] for d in by_day)
 
         # sometimes the ladder info is null, handle that
         if resp_data["ladderEle"] is not None:
@@ -638,10 +651,10 @@ class CSGClient:
             current_tariff = None
         # TODO what will happen to `current_ladder_remaining_kwh` when it's the last ladder?
         ladder = {
-            "ladder": current_ladder,
-            "start_date": current_ladder_start_date,
-            "remaining_kwh": current_ladder_remaining_kwh,
-            "tariff": current_tariff,
+            WF_ATTR_LADDER: current_ladder,
+            WF_ATTR_LADDER_START_DATE: current_ladder_start_date,
+            WF_ATTR_LADDER_REMAINING_KWH: current_ladder_remaining_kwh,
+            WF_ATTR_LADDER_TARIFF: current_tariff,
         }
 
         return month_total_cost, month_total_kwh, ladder, by_day
@@ -673,9 +686,9 @@ class CSGClient:
         for m_data in resp_data["electricAndChargeList"]:
             by_month.append(
                 {
-                    "month": m_data["yearMonth"],
-                    "charge": float(m_data["actualTotalAmount"]),
-                    "kwh": float(m_data["billingElectricity"]),
+                    WF_ATTR_MONTH: m_data[JSON_KEY_YEAR_MONTH],
+                    WF_ATTR_CHARGE: float(m_data["actualTotalAmount"]),
+                    WF_ATTR_KWH: float(m_data["billingElectricity"]),
                 }
             )
         return float(total_year_charge), float(total_year_kwh), by_month

@@ -71,6 +71,13 @@ from .csg_client import (
     CSGClient,
     CSGElectricityAccount,
     NotLoggedIn,
+    WF_ATTR_CHARGE,
+    WF_ATTR_DATE,
+    WF_ATTR_KWH,
+    WF_ATTR_LADDER,
+    WF_ATTR_LADDER_REMAINING_KWH,
+    WF_ATTR_LADDER_START_DATE,
+    WF_ATTR_LADDER_TARIFF,
 )
 from .utils import async_refresh_login_and_update_config
 
@@ -571,7 +578,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                 # but since the result from daily cost contains cost data, need to merge them
                 by_day = by_day_from_usage
                 for idx, item in enumerate(by_day_from_cost):
-                    by_day[idx]["cost"] = item["cost"]
+                    by_day[idx][WF_ATTR_CHARGE] = item[WF_ATTR_CHARGE]
                 kwh = kwh_from_usage
         return by_day, kwh
 
@@ -609,19 +616,23 @@ class CSGCoordinator(DataUpdateCoordinator):
                 this_month_by_day_from_cost,
             ) = result_cost
             ladder_stage = (
-                ladder["ladder"] if ladder["ladder"] is not None else STATE_UNAVAILABLE
+                ladder[WF_ATTR_LADDER]
+                if ladder[WF_ATTR_LADDER] is not None
+                else STATE_UNAVAILABLE
             )
             ladder_remaining_kwh = (
-                ladder["remaining_kwh"]
-                if ladder["remaining_kwh"] is not None
+                ladder[WF_ATTR_LADDER_REMAINING_KWH]
+                if ladder[WF_ATTR_LADDER_REMAINING_KWH] is not None
                 else STATE_UNAVAILABLE
             )
             ladder_tariff = (
-                ladder["tariff"] if ladder["tariff"] is not None else STATE_UNAVAILABLE
+                ladder[WF_ATTR_LADDER_TARIFF]
+                if ladder[WF_ATTR_LADDER_TARIFF] is not None
+                else STATE_UNAVAILABLE
             )
             ladder_start_date = (
-                ladder["start_date"]
-                if ladder["start_date"] is not None
+                ladder[WF_ATTR_LADDER_START_DATE]
+                if ladder[WF_ATTR_LADDER_START_DATE] is not None
                 else STATE_UNAVAILABLE
             )
         else:
@@ -778,9 +789,11 @@ class CSGCoordinator(DataUpdateCoordinator):
         else:
             if this_month_by_day != STATE_UNAVAILABLE and len(this_month_by_day) >= 1:
                 # we have this month's data, use the latest day
-                latest_day_kwh = this_month_by_day[-1]["kwh"]
-                latest_day_cost = this_month_by_day[-1].get("charge") or STATE_UNKNOWN
-                latest_day_date = this_month_by_day[-1]["date"]
+                latest_day_kwh = this_month_by_day[-1][WF_ATTR_KWH]
+                latest_day_cost = (
+                    this_month_by_day[-1].get(WF_ATTR_CHARGE) or STATE_UNKNOWN
+                )
+                latest_day_date = this_month_by_day[-1][WF_ATTR_DATE]
             else:
                 # this month isn't available yet (typically during the first 3 days)
                 # let's try last month
@@ -792,9 +805,9 @@ class CSGCoordinator(DataUpdateCoordinator):
                     ]
                     and len(last_month_by_day) >= 1
                 ):
-                    latest_day_kwh = last_month_by_day[-1]["kwh"]
+                    latest_day_kwh = last_month_by_day[-1][WF_ATTR_KWH]
                     latest_day_cost = STATE_UNKNOWN
-                    latest_day_date = last_month_by_day[-1]["date"]
+                    latest_day_date = last_month_by_day[-1][WF_ATTR_DATE]
                 else:
                     _LOGGER.error(
                         "Ele account %s, no latest day data available",

@@ -49,15 +49,38 @@ RESP_STA_QR_TIMEOUT = "00010001"
 # from packet capture
 RESP_STA_LOGIN_WRONG_CREDENTIAL = "00010002"
 
+# account object serialisation and deserialisation
 ATTR_ACCOUNT_NUMBER = "account_number"
 ATTR_AREA_CODE = "area_code"
 ATTR_ELE_CUSTOMER_ID = "ele_customer_id"
 ATTR_METERING_POINT_ID = "metering_point_id"
 ATTR_ADDRESS = "address"
 ATTR_USER_NAME = "user_name"
-
-HEADER_X_AUTH_TOKEN = "x-auth-token"
-HEADER_CUST_NUMBER = "custNumber"
-
 ATTR_AUTH_TOKEN = "auth_token"
 ATTR_LOGIN_TYPE = "login_type"
+
+# JSON/Headers used in raw APIs
+HEADER_X_AUTH_TOKEN = "x-auth-token"
+HEADER_CUST_NUMBER = "custNumber"
+JSON_KEY_STA = "sta"
+JSON_KEY_MESSAGE = "message"
+JSON_KEY_CUST_NUMBER = "custNumber"
+JSON_KEY_DATA = "data"
+JSON_KEY_LOGON_CHAN = "logonChan"
+JSON_KEY_CRED_TYPE = "credType"
+JSON_KEY_AREA_CODE = "areaCode"
+JSON_KEY_ACCT_ID = "acctId"
+JSON_KEY_ELE_CUST_ID = "eleCustId"
+JSON_KEY_METERING_POINT_ID = "meteringPointId"
+JSON_KEY_YEAR_MONTH = "yearMonth"
+
+# for wrapper functions
+WF_ATTR_LADDER = "ladder"
+WF_ATTR_LADDER_START_DATE = "start_date"
+WF_ATTR_LADDER_REMAINING_KWH = "remaining_kwh"
+WF_ATTR_LADDER_TARIFF = "tariff"
+
+WF_ATTR_DATE = "date"
+WF_ATTR_MONTH = "month"
+WF_ATTR_CHARGE = "charge"
+WF_ATTR_KWH = "kwh"
