@@ -550,36 +550,37 @@ class CSGCoordinator(DataUpdateCoordinator):
     @staticmethod
     def merge_by_day_data(
         by_day_from_cost: list | str,
-        kwh_from_cost: float | str,
+        kwh_from_cost: float | str | None,
         by_day_from_usage: list | str,
         kwh_from_usage: float | str,
     ) -> (list | str, float | str):
         """Merge by_day_from_usage and by_day_from_cost data"""
-        if (
-            by_day_from_cost == STATE_UNAVAILABLE
-            and by_day_from_usage == STATE_UNAVAILABLE
-        ):
-            by_day = STATE_UNAVAILABLE
-            kwh = STATE_UNAVAILABLE
-        elif by_day_from_cost == STATE_UNAVAILABLE:
+        # merge by_day
+        # determine which is the latest
+        if len(by_day_from_cost) >= len(by_day_from_usage):
+            # the result from daily cost is newer
+            by_day = by_day_from_cost
+        else:
+            # the result from daily usage is newer
+            # but since the result from daily cost contains cost data, need to merge them
             by_day = by_day_from_usage
+            for idx, item in enumerate(by_day_from_cost):
+                by_day[idx][WF_ATTR_CHARGE] = item[WF_ATTR_CHARGE]
+
+        # determine which one to use as kwh
+        if (
+            kwh_from_cost in [STATE_UNAVAILABLE, None]
+            and kwh_from_usage == STATE_UNAVAILABLE
+        ):
+            kwh = STATE_UNAVAILABLE
+        elif kwh_from_cost in [STATE_UNAVAILABLE, None]:
             kwh = kwh_from_usage
         elif kwh_from_usage == STATE_UNAVAILABLE:
-            by_day = by_day_from_cost
-            kwh = kwh_from_cost
+            kwh = kwh_from_cost if kwh_from_cost is not None else STATE_UNAVAILABLE
         else:
-            # determine which is the latest
-            if len(by_day_from_cost) >= len(by_day_from_usage):
-                # the result from daily cost is newer
-                by_day = by_day_from_cost
-                kwh = kwh_from_cost
-            else:
-                # the result from daily usage is newer
-                # but since the result from daily cost contains cost data, need to merge them
-                by_day = by_day_from_usage
-                for idx, item in enumerate(by_day_from_cost):
-                    by_day[idx][WF_ATTR_CHARGE] = item[WF_ATTR_CHARGE]
-                kwh = kwh_from_usage
+            # determine which kwh is the latest
+            # get the larger one
+            kwh = max(kwh_from_cost, kwh_from_usage)
         return by_day, kwh
 
     async def _async_update_this_month_stats_and_ladder(
@@ -658,6 +659,10 @@ class CSGCoordinator(DataUpdateCoordinator):
             kwh_from_usage=this_month_kwh_from_usage,
             by_day_from_cost=this_month_by_day_from_cost,
             kwh_from_cost=this_month_kwh_from_cost,
+        )
+
+        this_month_cost = (
+            this_month_cost if this_month_cost is not None else STATE_UNAVAILABLE
         )
 
         if this_month_by_day == STATE_UNAVAILABLE:

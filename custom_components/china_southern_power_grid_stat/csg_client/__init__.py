@@ -586,7 +586,7 @@ class CSGClient:
 
     def get_month_daily_cost_detail(
         self, account: CSGElectricityAccount, year_month: tuple[int, int]
-    ) -> tuple[float, float, dict, list[dict[str, str | float]]]:
+    ) -> tuple[float | None, float | None, dict, list[dict[str, str | float]]]:
         """Get daily cost of current month"""
 
         year, month = year_month
@@ -609,25 +609,17 @@ class CSGClient:
                 }
             )
 
-        # sometimes the data by day is present, but the total amount is not
-        # however they are usually not the same, the data from api is a bit more than calculated
+        # sometimes the data by day is present, but the total amount and ladder are not
+
         if resp_data["totalElectricity"] is not None:
             month_total_cost = float(resp_data["totalElectricity"])
         else:
-            _LOGGER.warning(
-                "Function get_month_daily_cost_detail %s: Value of totalElectricity is None, calculate from daily data",
-                year_month,
-            )
-            month_total_cost = sum(d[WF_ATTR_CHARGE] for d in by_day)
+            month_total_cost = None
 
         if resp_data["totalPower"] is not None:
             month_total_kwh = float(resp_data["totalPower"])
         else:
-            _LOGGER.warning(
-                "Function get_month_daily_cost_detail %s: Value of totalPower is None, calculate from daily data",
-                year_month,
-            )
-            month_total_kwh = sum(d[WF_ATTR_KWH] for d in by_day)
+            month_total_kwh = None
 
         # sometimes the ladder info is null, handle that
         if resp_data["ladderEle"] is not None:
