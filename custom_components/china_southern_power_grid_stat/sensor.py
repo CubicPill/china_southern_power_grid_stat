@@ -922,6 +922,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             self._async_update_last_year_stats(account),
             self._async_update_this_month_stats_and_ladder(account),
             self._async_update_last_month_stats(account),
+            return_exceptions=True,
         )
         self._update_latest_day(account)
         _LOGGER.debug(
