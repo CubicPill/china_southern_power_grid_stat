@@ -14,6 +14,6 @@
     "pycryptodome==3.15.0"
   ],
   "ssdp": [],
-  "version": "1.1.2-beta",
+  "version": "1.1.2-beta.2",
   "zeroconf": []
 }

@@ -19,7 +19,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_USERNAME,
     STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
     UnitOfEnergy,
 )
 from homeassistant.core import HomeAssistant, callback
@@ -549,22 +548,20 @@ class CSGCoordinator(DataUpdateCoordinator):
 
     @staticmethod
     def merge_by_day_data(
-        by_day_from_cost: list | str | None,
-        kwh_from_cost: float | str | None,
+        by_day_from_cost: list | str,
+        kwh_from_cost: float | str,
         by_day_from_usage: list | str,
         kwh_from_usage: float | str,
     ) -> (list | str, float | str):
         """Merge by_day_from_usage and by_day_from_cost data"""
         # merge by_day
         # determine which is the latest
-        # by_day_from_cost could be in [STATE_UNAVAILABLE, None]
-        # STATE_UNAVAILABLE is request failure and None is no data
         if (
-            by_day_from_cost in [STATE_UNAVAILABLE, None]
+            by_day_from_cost == STATE_UNAVAILABLE
             and by_day_from_usage == STATE_UNAVAILABLE
         ):
             by_day = STATE_UNAVAILABLE
-        elif by_day_from_cost in [STATE_UNAVAILABLE, None]:
+        elif by_day_from_cost == STATE_UNAVAILABLE:
             by_day = by_day_from_usage
         elif by_day_from_usage == STATE_UNAVAILABLE:
             by_day = by_day_from_cost
@@ -581,15 +578,12 @@ class CSGCoordinator(DataUpdateCoordinator):
                     by_day[idx][WF_ATTR_CHARGE] = item[WF_ATTR_CHARGE]
 
         # determine which one to use as kwh
-        if (
-            kwh_from_cost in [STATE_UNAVAILABLE, None]
-            and kwh_from_usage == STATE_UNAVAILABLE
-        ):
+        if kwh_from_cost == STATE_UNAVAILABLE and kwh_from_usage == STATE_UNAVAILABLE:
             kwh = STATE_UNAVAILABLE
-        elif kwh_from_cost in [STATE_UNAVAILABLE, None]:
+        elif kwh_from_cost == STATE_UNAVAILABLE:
             kwh = kwh_from_usage
         elif kwh_from_usage == STATE_UNAVAILABLE:
-            kwh = kwh_from_cost if kwh_from_cost is not None else STATE_UNAVAILABLE
+            kwh = kwh_from_cost
         else:
             # determine which kwh is the latest
             # get the larger one
@@ -629,6 +623,11 @@ class CSGCoordinator(DataUpdateCoordinator):
                 ladder,
                 this_month_by_day_from_cost,
             ) = result_cost
+            # special processing
+            if this_month_cost is None:
+                this_month_cost = STATE_UNAVAILABLE
+            if this_month_kwh_from_cost is None:
+                this_month_kwh_from_cost = STATE_UNAVAILABLE
             ladder_stage = (
                 ladder[WF_ATTR_LADDER]
                 if ladder[WF_ATTR_LADDER] is not None
@@ -672,10 +671,6 @@ class CSGCoordinator(DataUpdateCoordinator):
             kwh_from_usage=this_month_kwh_from_usage,
             by_day_from_cost=this_month_by_day_from_cost,
             kwh_from_cost=this_month_kwh_from_cost,
-        )
-
-        this_month_cost = (
-            this_month_cost if this_month_cost is not None else STATE_UNAVAILABLE
         )
 
         if this_month_by_day == STATE_UNAVAILABLE:
@@ -759,14 +754,23 @@ class CSGCoordinator(DataUpdateCoordinator):
                 last_month_cost,
                 last_month_kwh_from_cost,
                 _,  # ladder is discarded
-                this_month_by_day_from_cost,
+                last_month_by_day_from_cost,
             ) = result_cost
 
+            # for last month, it's safe to calculate total kwh from cost
+            if not last_month_cost:
+                last_month_cost = sum(
+                    d[WF_ATTR_CHARGE] for d in last_month_by_day_from_cost
+                )
+            if not last_month_kwh_from_cost:
+                last_month_kwh_from_cost = sum(
+                    d[WF_ATTR_KWH] for d in last_month_by_day_from_cost
+                )
         else:
             (
                 last_month_cost,
                 last_month_kwh_from_cost,
-                this_month_by_day_from_cost,
+                last_month_by_day_from_cost,
             ) = (
                 STATE_UNAVAILABLE,
                 STATE_UNAVAILABLE,
@@ -775,7 +779,7 @@ class CSGCoordinator(DataUpdateCoordinator):
         last_month_by_day, last_month_kwh = self.merge_by_day_data(
             by_day_from_usage=last_month_by_day_from_usage,
             kwh_from_usage=last_month_kwh_from_usage,
-            by_day_from_cost=this_month_by_day_from_cost,
+            by_day_from_cost=last_month_by_day_from_cost,
             kwh_from_cost=last_month_kwh_from_cost,
         )
 
@@ -809,7 +813,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                 # we have this month's data, use the latest day
                 latest_day_kwh = this_month_by_day[-1][WF_ATTR_KWH]
                 latest_day_cost = (
-                    this_month_by_day[-1].get(WF_ATTR_CHARGE) or STATE_UNKNOWN
+                    this_month_by_day[-1].get(WF_ATTR_CHARGE) or STATE_UNAVAILABLE
                 )
                 latest_day_date = this_month_by_day[-1][WF_ATTR_DATE]
             else:
@@ -824,7 +828,7 @@ class CSGCoordinator(DataUpdateCoordinator):
                     and len(last_month_by_day) >= 1
                 ):
                     latest_day_kwh = last_month_by_day[-1][WF_ATTR_KWH]
-                    latest_day_cost = STATE_UNKNOWN
+                    latest_day_cost = STATE_UNAVAILABLE
                     latest_day_date = last_month_by_day[-1][WF_ATTR_DATE]
                 else:
                     _LOGGER.error(
@@ -924,7 +928,15 @@ class CSGCoordinator(DataUpdateCoordinator):
             self._async_update_last_month_stats(account),
             return_exceptions=True,
         )
-        self._update_latest_day(account)
+        try:
+            self._update_latest_day(account)
+        except Exception as exc:  # pylint: disable=broad-except
+            _LOGGER.error(
+                "Ele account %s, update latest day data failed: %s",
+                account.account_number,
+                exc,
+            )
+
         _LOGGER.debug(
             "Ele account %s, update took %s seconds",
             account.account_number,
