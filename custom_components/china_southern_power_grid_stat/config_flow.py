@@ -52,11 +52,11 @@ from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
 
 _LOGGER = logging.getLogger(__name__)
 
-def authenticate_csg(username: str, password: str) -> CSGClient:
+def authenticate_csg(username: str, password: str, code: str) -> CSGClient:
     """use username and password combination to authenticate"""
     client = CSGClient()
     try:
-        client.authenticate(username, password)
+        client.authenticate(username, password, code)
     except InvalidCredentials as exc:
         _LOGGER.error("Authentication failed: %s", exc)
         raise InvalidAuth from exc
@@ -71,7 +71,7 @@ async def validate_input(
     """Validate the credentials (login)"""
 
     client = await hass.async_add_executor_job(
-        authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD]
+        authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD], data[CONF_VERIFICATION_CODE]
     )
     return client.dump()
 
@@ -158,13 +158,19 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         password = self.context["user_data"][CONF_PASSWORD]
         verification_code = user_input[CONF_VERIFICATION_CODE]
 
+        self.context["user_data"] = {
+            CONF_USERNAME: username,
+            CONF_PASSWORD: password,
+            CONF_VERIFICATION_CODE: verification_code,
+        }
+
         client = CSGClient()
 
         errors = {}
         try:
             # Attempt to authenticate using the verification code
             session_data = await self.hass.async_add_executor_job(
-                client.authenticate_with_code, username, password, verification_code
+                client.api_login_with_password, username, password, verification_code
             )
 
             # Successful authentication, create the entry
@@ -295,6 +301,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                 client.authenticate,
                 self.config_entry.data[CONF_USERNAME],
                 self.config_entry.data[CONF_PASSWORD],
+                self.config_entry.data[CONF_VERIFICATION_CODE],
             )
         await self.hass.async_add_executor_job(client.initialize)
 
