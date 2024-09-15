@@ -6,7 +6,9 @@
         "description": "使用手机号和密码登录",
         "data": {
           "username": "手机号",
-          "password": "密码"
+          "password": "密码",
+          "code": "验证码",
+          "send_code": "发送验证码"
         }
       },
       "reauth_confirm": {

@@ -8,6 +8,7 @@ Steps:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -27,6 +28,7 @@ from .const import (
     ABORT_NO_ACCOUNT_TO_DELETE,
     CONF_ACCOUNT_NUMBER,
     CONF_ACTION,
+    CONF_VERIFICATION_CODE,
     CONF_AUTH_TOKEN,
     CONF_ELE_ACCOUNTS,
     CONF_GENERAL_ERROR,
@@ -50,12 +52,11 @@ from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def authenticate_csg(username: str, password: str) -> CSGClient:
+def authenticate_csg(username: str, password: str, code: str) -> CSGClient:
     """use username and password combination to authenticate"""
     client = CSGClient()
     try:
-        client.authenticate(username, password)
+        client.authenticate(username, password, code)
     except InvalidCredentials as exc:
         _LOGGER.error("Authentication failed: %s", exc)
         raise InvalidAuth from exc
@@ -70,9 +71,11 @@ async def validate_input(
     """Validate the credentials (login)"""
 
     client = await hass.async_add_executor_job(
-        authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD]
+        authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD], data[CONF_VERIFICATION_CODE]
     )
     return client.dump()
+
+
 
 
 class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -88,6 +91,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
         return CSGOptionsFlowHandler(config_entry)
+    
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -106,52 +110,78 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(step_id=STEP_USER, data_schema=schema)
 
-        errors = {}
-        unique_id = f"CSG-{user_input[CONF_USERNAME]}"
-        await self.async_set_unique_id(unique_id)
-        self._abort_if_unique_id_configured()
+        # Initialize the client
+        client = CSGClient()
 
-        # noinspection PyBroadException
+        errors = {}
         try:
-            session_data = await validate_input(self.hass, user_input)
-        except CannotConnect:
+            # Send SMS verification code after receiving username and password
+            await asyncio.to_thread(client.api_send_login_sms, user_input[CONF_USERNAME])
+
+            # Save username and password for the next step (verification)
+            self.context["user_data"] = {
+                CONF_USERNAME: user_input[CONF_USERNAME],
+                CONF_PASSWORD: user_input[CONF_PASSWORD],
+            }
+
+            # Move to the verification step
+            return await self.async_step_verification()
+        
+        except RequestException:
             errors[CONF_GENERAL_ERROR] = ERROR_CANNOT_CONNECT
         except InvalidAuth:
             errors[CONF_GENERAL_ERROR] = ERROR_INVALID_AUTH
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
+        except Exception:
+            _LOGGER.exception("Unexpected exception during login")
             errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
-        else:
-            if self.reauth_entry:
-                new_data = self.reauth_entry.data.copy()
-                if user_input[CONF_USERNAME] != new_data[CONF_USERNAME]:
-                    _LOGGER.warning(
-                        "Account name changed: previous: %s, now: %s",
-                        new_data[CONF_USERNAME],
-                        user_input[CONF_USERNAME],
-                    )
-                new_data[CONF_USERNAME] = user_input[CONF_USERNAME]
-                new_data[CONF_PASSWORD] = user_input[CONF_PASSWORD]
-                new_data[CONF_AUTH_TOKEN] = session_data[CONF_AUTH_TOKEN]
-                new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
-                self.hass.config_entries.async_update_entry(
-                    self.reauth_entry,
-                    data=new_data,
-                    title=f"CSG-{user_input[CONF_USERNAME]}",
-                )
-                await self.hass.config_entries.async_reload(self.reauth_entry.entry_id)
-                _LOGGER.info(
-                    "Reauth of account %s is successful!", user_input[CONF_USERNAME]
-                )
-                return self.async_abort(reason="reauth_successful")
 
-            _LOGGER.info("Adding csg account %s", user_input[CONF_USERNAME])
+        return self.async_show_form(step_id=STEP_USER, data_schema=schema, errors=errors)
+
+    async def async_step_verification(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """
+        Second step: input verification code and verify it with the server.
+        """
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_VERIFICATION_CODE): str,
+            }
+        )
+
+        if user_input is None:
+            # First time in this step
+            return self.async_show_form(step_id="verification", data_schema=schema)
+
+        # Retrieve saved username and password from the context
+        username = self.context["user_data"][CONF_USERNAME]
+        password = self.context["user_data"][CONF_PASSWORD]
+        verification_code = user_input[CONF_VERIFICATION_CODE]
+
+        self.context["user_data"] = {
+            CONF_USERNAME: username,
+            CONF_PASSWORD: password,
+            CONF_VERIFICATION_CODE: verification_code,
+        }
+
+        client = CSGClient()
+
+        errors = {}
+        try:
+            # Attempt to authenticate using the verification code
+            session_data = await self.hass.async_add_executor_job(
+                client.api_login_with_password, username, password, verification_code
+            )
+
+            _LOGGER.debug("session data: %s", session_data)
+
+            # Successful authentication, create the entry
             return self.async_create_entry(
-                title=f"CSG-{user_input[CONF_USERNAME]}",
+                title=f"CSG-{username}",
                 data={
-                    CONF_USERNAME: user_input[CONF_USERNAME],
-                    CONF_PASSWORD: user_input[CONF_PASSWORD],
-                    CONF_AUTH_TOKEN: session_data[CONF_AUTH_TOKEN],
+                    CONF_USERNAME: username,
+                    CONF_PASSWORD: password,
+                    CONF_AUTH_TOKEN: session_data,
                     CONF_ELE_ACCOUNTS: {},
                     CONF_SETTINGS: {
                         CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
@@ -160,9 +190,15 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 },
             )
 
-        return self.async_show_form(
-            step_id=STEP_USER, data_schema=schema, errors=errors
-        )
+        except CannotConnect:
+            errors[CONF_GENERAL_ERROR] = ERROR_CANNOT_CONNECT
+        except InvalidAuth:
+            errors[CONF_GENERAL_ERROR] = ERROR_INVALID_AUTH
+        except Exception:
+            _LOGGER.exception("Unexpected exception during verification")
+            errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
+
+        return self.async_show_form(step_id="verification", data_schema=schema, errors=errors)
 
     async def async_step_reauth(self, user_input=None):
         """Perform reauth upon an API authentication error."""
@@ -267,6 +303,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                 client.authenticate,
                 self.config_entry.data[CONF_USERNAME],
                 self.config_entry.data[CONF_PASSWORD],
+                self.config_entry.data[CONF_VERIFICATION_CODE],
             )
         await self.hass.async_add_executor_job(client.initialize)
 

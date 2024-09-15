@@ -238,7 +238,11 @@ class CSGClient:
                     "API call %s returned status code %d", path, response.status_code
                 )
                 raise CSGHTTPError(response.status_code)
-            response_data = response.json()
+            
+            json_str = response.content.decode('utf-8', errors='ignore')
+            json_str = json_str[json_str.find('{'):json_str.rfind('}')+1]
+            json_data = json.loads(json_str)
+            response_data = json_data
             _LOGGER.debug("_make_request: response: %s", json.dumps(response_data))
 
             # headers need to be returned since they may contain additional data
@@ -297,15 +301,17 @@ class CSGClient:
             return resp_header[HEADER_X_AUTH_TOKEN]
         self._handle_unsuccessful_response(path, resp_data)
 
-    def api_login_with_password(self, phone_no: str, password: str):
+    def api_login_with_password(self, phone_no: str, password: str, code: str):
         """Login with phone number and password"""
-        path = "center/login"
+        path = "center/loginByPwdAndMsg"
         payload = {
             JSON_KEY_AREA_CODE: AREACODE_FALLBACK,
             JSON_KEY_ACCT_ID: phone_no,
             JSON_KEY_LOGON_CHAN: LOGON_CHANNEL_HANDHELD_HALL,
             JSON_KEY_CRED_TYPE: LOGIN_TYPE_PHONE_PWD,
             "credentials": encrypt_credential(password),
+            "code": code,
+            "checkPwd": True
         }
         payload = {"param": encrypt_params(payload)}
         resp_header, resp_data = self._make_request(
@@ -509,12 +515,12 @@ class CSGClient:
         self.auth_token = auth_token
         self.login_type = login_type
 
-    def authenticate(self, phone_no: str, password: str):
+    def authenticate(self, phone_no: str, password: str, code: str):
         """
         Authenticate the client using phone number and password
         Will set session parameters
         """
-        auth_token = self.api_login_with_password(phone_no, password)
+        auth_token = self.api_login_with_password(phone_no, password, code)
         self.set_authentication_params(auth_token, LoginType.LOGIN_TYPE_PWD)
 
     def initialize(self):
@@ -693,3 +699,4 @@ class CSGClient:
         return float(resp_data["power"])
 
     # end high-level api wrappers
+

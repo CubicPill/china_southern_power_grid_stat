@@ -14,6 +14,7 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_SETTINGS = "settings"
 CONF_UPDATED_AT = "updated_at"
 CONF_ACTION = "action"
+CONF_VERIFICATION_CODE = "code"
 
 STEP_USER = "user"
 STEP_INIT = "init"
