@@ -173,13 +173,15 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 client.api_login_with_password, username, password, verification_code
             )
 
+            _LOGGER.debug("session data: %s", session_data)
+
             # Successful authentication, create the entry
             return self.async_create_entry(
                 title=f"CSG-{username}",
                 data={
                     CONF_USERNAME: username,
                     CONF_PASSWORD: password,
-                    CONF_AUTH_TOKEN: session_data[CONF_AUTH_TOKEN],
+                    CONF_AUTH_TOKEN: session_data,
                     CONF_ELE_ACCOUNTS: {},
                     CONF_SETTINGS: {
                         CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,

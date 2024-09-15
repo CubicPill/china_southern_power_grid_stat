@@ -39,7 +39,7 @@ CREDENTIAL_PUBKEY = (
 # however they're not programmatically linked in the source code
 # use them as seperated parameters for now
 LOGIN_TYPE_PHONE_CODE = "11"
-LOGIN_TYPE_PHONE_PWD = "10"
+LOGIN_TYPE_PHONE_PWD = "1011"
 SEND_MSG_TYPE_VERIFICATION_CODE = "1"
 VERIFICATION_CODE_TYPE_LOGIN = "1"
 

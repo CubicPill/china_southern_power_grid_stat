@@ -238,7 +238,11 @@ class CSGClient:
                     "API call %s returned status code %d", path, response.status_code
                 )
                 raise CSGHTTPError(response.status_code)
-            response_data = response.json()
+            
+            json_str = response.content.decode('utf-8', errors='ignore')
+            json_str = json_str[json_str.find('{'):json_str.rfind('}')+1]
+            json_data = json.loads(json_str)
+            response_data = json_data
             _LOGGER.debug("_make_request: response: %s", json.dumps(response_data))
 
             # headers need to be returned since they may contain additional data
@@ -307,6 +311,7 @@ class CSGClient:
             JSON_KEY_CRED_TYPE: LOGIN_TYPE_PHONE_PWD,
             "credentials": encrypt_credential(password),
             "code": code,
+            "checkPwd": True
         }
         payload = {"param": encrypt_params(payload)}
         resp_header, resp_data = self._make_request(
@@ -695,8 +700,3 @@ class CSGClient:
 
     # end high-level api wrappers
 
-
-client = CSGClient()
-res = client.api_send_login_sms("17322302092")
-
-print(res)
