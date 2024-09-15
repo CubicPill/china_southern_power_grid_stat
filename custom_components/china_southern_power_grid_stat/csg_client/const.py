@@ -1,7 +1,7 @@
 """Constants for csg_client"""
 from enum import Enum
 
-# BASE_PATH_WEB = "https://95598.csg.cn/ucs/ma/wt/"
+BASE_PATH_WEB = "https://95598.csg.cn/ucs/ma/wt/"
 BASE_PATH_APP = "https://95598.csg.cn/ucs/ma/zt/"
 
 # https://95598.csg.cn/js/app.1.6.177.1667607288138.js
@@ -13,18 +13,33 @@ RESP_STA_SUCCESS = "00"
 RESP_STA_EMPTY_PARAMETER = "01"
 RESP_STA_SYSTEM_ERROR = "02"
 RESP_STA_NO_LOGIN = "04"
+RESP_STA_QR_NOT_SCANNED = "09"
 SESSION_KEY_LOGIN_TYPE = "10"
 
 
-class LoginType(Enum):
+class LoginType(str, Enum):
     """Login type from JS"""
 
     LOGIN_TYPE_SMS = "11"
-    LOGIN_TYPE_PWD = "10"
+    LOGIN_TYPE_PWD_AND_SMS = "1011"
     LOGIN_TYPE_WX_QR = "20"
     LOGIN_TYPE_ALI_QR = "21"
     LOGIN_TYPE_CSG_QR = "30"
 
+
+class QRCodeType(str, Enum):
+    """QR code type used in creation API"""
+
+    QR_CSG = "app"
+    QR_WECHAT = "wechat"
+    QR_ALIPAY = "alipay"
+
+
+LOGIN_TYPE_TO_QR_CODE_TYPE = {
+    LoginType.LOGIN_TYPE_CSG_QR: QRCodeType.QR_CSG,
+    LoginType.LOGIN_TYPE_WX_QR: QRCodeType.QR_WECHAT,
+    LoginType.LOGIN_TYPE_ALI_QR: QRCodeType.QR_ALIPAY,
+}
 
 AREACODE_FALLBACK = AREACODE_GUANGDONG = "030000"
 
@@ -39,7 +54,7 @@ CREDENTIAL_PUBKEY = (
 # however they're not programmatically linked in the source code
 # use them as seperated parameters for now
 LOGIN_TYPE_PHONE_CODE = "11"
-LOGIN_TYPE_PHONE_PWD = "1011"
+LOGIN_TYPE_PHONE_PWD_CODE = "1011"
 SEND_MSG_TYPE_VERIFICATION_CODE = "1"
 VERIFICATION_CODE_TYPE_LOGIN = "1"
 
@@ -67,8 +82,10 @@ JSON_KEY_MESSAGE = "message"
 JSON_KEY_CUST_NUMBER = "custNumber"
 JSON_KEY_DATA = "data"
 JSON_KEY_LOGON_CHAN = "logonChan"
+JSON_KEY_SMS_CODE = "code"
 JSON_KEY_CRED_TYPE = "credType"
 JSON_KEY_AREA_CODE = "areaCode"
+JSON_KEY_PARAM = "param"
 JSON_KEY_ACCT_ID = "acctId"
 JSON_KEY_ELE_CUST_ID = "eleCustId"
 JSON_KEY_METERING_POINT_ID = "meteringPointId"

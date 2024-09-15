@@ -185,8 +185,8 @@ class CSGClient:
 
     def __init__(
         self,
+        login_type: LoginType,
         auth_token: str | None = None,
-        login_type: LoginType | None = None,
     ) -> None:
         self._session: requests.Session = requests.Session()
         self._common_headers = {
@@ -204,7 +204,7 @@ class CSGClient:
         }
 
         self.auth_token = auth_token or ""
-        self.login_type = login_type or LoginType.LOGIN_TYPE_PWD
+        self.login_type = login_type
 
         # identifier, need to be set in initialize()
         self.customer_number = ""
@@ -217,13 +217,14 @@ class CSGClient:
         with_auth: bool = True,
         method: str = "POST",
         custom_headers: dict | None = None,
+        base_path: str = BASE_PATH_APP,
     ):
         """
         Function to make the http request to api endpoints
         can automatically add authentication header(s)
         """
         _LOGGER.debug("_make_request: %s, %s, %s, %s", path, payload, with_auth, method)
-        url = BASE_PATH_APP + path
+        url = base_path + path
         headers = copy(self._common_headers)
         if custom_headers:
             for _k, _v in custom_headers.items():
@@ -238,9 +239,9 @@ class CSGClient:
                     "API call %s returned status code %d", path, response.status_code
                 )
                 raise CSGHTTPError(response.status_code)
-            
-            json_str = response.content.decode('utf-8', errors='ignore')
-            json_str = json_str[json_str.find('{'):json_str.rfind('}')+1]
+
+            json_str = response.content.decode("utf-8", errors="ignore")
+            json_str = json_str[json_str.find("{") : json_str.rfind("}") + 1]
             json_data = json.loads(json_str)
             response_data = json_data
             _LOGGER.debug("_make_request: response: %s", json.dumps(response_data))
@@ -271,7 +272,9 @@ class CSGClient:
 
     # begin raw api functions
     def api_send_login_sms(self, phone_no: str):
-        """Send SMS verification code to phone_no"""
+        """Send SMS verification code to phone_no
+        Note this is not the function for login with SMS, it only requests to send the code
+        """
         path = "center/sendMsg"
         payload = {
             JSON_KEY_AREA_CODE: AREACODE_FALLBACK,
@@ -284,7 +287,46 @@ class CSGClient:
             return True
         self._handle_unsuccessful_response(path, resp_data)
 
-    def api_login_with_sms_code(self, phone_no: str, code: str):
+    def api_create_login_qr_code(
+        self, channel: QRCodeType, login_id: str | None = None
+    ) -> (str, str):
+        """Request API to create a QR code for login
+        Returns login_id and link to QR code image
+        """
+        path = "center/createLoginQrcode"
+
+        login_id = login_id or generate_qr_login_id()
+        payload = {
+            JSON_KEY_AREA_CODE: AREACODE_FALLBACK,
+            "channel": channel,
+            # NOTE: this spell error is intentional
+            "lgoinId": login_id,
+        }
+        _, resp_data = self._make_request(
+            path, payload, with_auth=False, base_path=BASE_PATH_WEB
+        )
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return login_id, resp_data[JSON_KEY_DATA]
+        self._handle_unsuccessful_response(path, resp_data)
+
+    def api_get_qr_login_status(self, login_id: str) -> (bool, str):
+        """Get login status of the QR code"""
+        path = "center/getLoginInfo"
+        payload = {
+            JSON_KEY_AREA_CODE: AREACODE_FALLBACK,
+            # this one is the correct spelling
+            "loginId": login_id,
+        }
+        resp_header, resp_data = self._make_request(
+            path, payload, with_auth=False, base_path=BASE_PATH_WEB
+        )
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return True, resp_header[HEADER_X_AUTH_TOKEN]
+        if resp_data[JSON_KEY_STA] == RESP_STA_QR_NOT_SCANNED:
+            return False, ""
+        self._handle_unsuccessful_response(path, resp_data)
+
+    def api_login_with_sms_code(self, phone_no: str, sms_code: str):
         """Login with phone number and SMS code"""
         path = "center/login"
         payload = {
@@ -292,8 +334,9 @@ class CSGClient:
             JSON_KEY_ACCT_ID: phone_no,
             JSON_KEY_LOGON_CHAN: LOGON_CHANNEL_HANDHELD_HALL,
             JSON_KEY_CRED_TYPE: LOGIN_TYPE_PHONE_CODE,
-            "code": code,
+            JSON_KEY_SMS_CODE: sms_code,
         }
+        payload = {JSON_KEY_PARAM: encrypt_params(payload)}
         resp_header, resp_data = self._make_request(
             path, payload, with_auth=False, custom_headers={"need-crypto": "true"}
         )
@@ -301,19 +344,21 @@ class CSGClient:
             return resp_header[HEADER_X_AUTH_TOKEN]
         self._handle_unsuccessful_response(path, resp_data)
 
-    def api_login_with_password(self, phone_no: str, password: str, code: str):
-        """Login with phone number and password"""
+    def api_login_with_password_and_sms_code(
+        self, phone_no: str, password: str, sms_code: str
+    ):
+        """Login with phone number, SMS code and password"""
         path = "center/loginByPwdAndMsg"
         payload = {
             JSON_KEY_AREA_CODE: AREACODE_FALLBACK,
             JSON_KEY_ACCT_ID: phone_no,
             JSON_KEY_LOGON_CHAN: LOGON_CHANNEL_HANDHELD_HALL,
-            JSON_KEY_CRED_TYPE: LOGIN_TYPE_PHONE_PWD,
+            JSON_KEY_CRED_TYPE: LOGIN_TYPE_PHONE_PWD_CODE,
             "credentials": encrypt_credential(password),
-            "code": code,
-            "checkPwd": True
+            JSON_KEY_SMS_CODE: sms_code,
+            "checkPwd": True,
         }
-        payload = {"param": encrypt_params(payload)}
+        payload = {JSON_KEY_PARAM: encrypt_params(payload)}
         resp_header, resp_data = self._make_request(
             path, payload, with_auth=False, custom_headers={"need-crypto": "true"}
         )
@@ -515,14 +560,6 @@ class CSGClient:
         self.auth_token = auth_token
         self.login_type = login_type
 
-    def authenticate(self, phone_no: str, password: str, code: str):
-        """
-        Authenticate the client using phone number and password
-        Will set session parameters
-        """
-        auth_token = self.api_login_with_password(phone_no, password, code)
-        self.set_authentication_params(auth_token, LoginType.LOGIN_TYPE_PWD)
-
     def initialize(self):
         """Initialize the client"""
         resp_data = self.api_get_user_info()
@@ -540,7 +577,7 @@ class CSGClient:
         """Logout and reset identifier, token etc."""
         self.api_logout(LOGON_CHANNEL_HANDHELD_HALL, self.login_type.value)
         self.auth_token = ""
-        self.login_type = LoginType.LOGIN_TYPE_PWD
+        self.login_type = None
         self.customer_number = ""
 
     # end utility functions
@@ -699,4 +736,3 @@ class CSGClient:
         return float(resp_data["power"])
 
     # end high-level api wrappers
-

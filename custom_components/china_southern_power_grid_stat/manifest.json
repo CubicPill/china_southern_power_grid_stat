@@ -11,7 +11,8 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/CubicPill/china_southern_power_grid_stat/issues",
   "requirements": [
-    "pycryptodome==3.15.0"
+    "pycryptodome",
+    "brotli"
   ],
   "ssdp": [],
   "version": "1.1.2",
