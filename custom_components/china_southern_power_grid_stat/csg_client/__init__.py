@@ -127,7 +127,8 @@ class CSGElectricityAccount:
         # this may change on every login, alternative name in js code is `binding_id`
         self.ele_customer_id = ele_customer_id
 
-        # in fact one account may have multiple metering points, however for individual users there should only be one
+        # in fact one account may have multiple metering points,
+        # however for individual users there should only be one
         self.metering_point_id = metering_point_id
 
         # for frontend display only
@@ -177,15 +178,14 @@ class CSGClient:
     Do not call any functions starts with _api unless you are certain about what you're doing
 
     How to use:
-    First call `CSGWebClient.authenticate`, this will authenticate the client using username and password.
-    Then call `CSGWebClient.initialize`
+    First call one of the functions to login (see example code)
+    Then call `CSGClient.initialize` *important
     To get all linked electricity accounts, call `get_all_electricity_accounts`
     Use the account objects to call the utility functions and wrapped api functions
     """
 
     def __init__(
         self,
-        login_type: LoginType,
         auth_token: str | None = None,
     ) -> None:
         self._session: requests.Session = requests.Session()
@@ -203,11 +203,10 @@ class CSGClient:
             "Accept-Language": "zh-CN,cn;q=0.9",
         }
 
-        self.auth_token = auth_token or ""
-        self.login_type = login_type
+        self.auth_token = auth_token
 
         # identifier, need to be set in initialize()
-        self.customer_number = ""
+        self.customer_number = None
 
     # begin internal utility functions
     def _make_request(
@@ -449,7 +448,8 @@ class CSGClient:
         metering_point_id: str,
     ) -> dict:
         """get charge by day in the given month
-        KNOWN BUG: this api call returns the daily cost data of year_month, but the ladder data will be this month's
+        KNOWN BUG: this api call returns the daily cost data of year_month,
+        but the ladder data will be this month's.
         this api call could take a long time to return (~30s)
         """
         path = "charge/queryDayElectricChargeByMPoint"
@@ -459,7 +459,7 @@ class CSGClient:
             JSON_KEY_YEAR_MONTH: f"{year}{month:02d}",
             JSON_KEY_METERING_POINT_ID: metering_point_id,
         }
-        custom_headers = {"funid": "100t002"}
+        custom_headers = {"funid": "100t002"}  # TODO: what does this do? region?
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
         if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
             return resp_data[JSON_KEY_DATA]
@@ -520,7 +520,7 @@ class CSGClient:
             return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
-    def api_logout(self, logon_chan: str, cred_type) -> None:
+    def api_logout(self, logon_chan: str, cred_type: LoginType) -> None:
         """logout"""
         path = "center/logout"
         payload = {JSON_KEY_LOGON_CHAN: logon_chan, JSON_KEY_CRED_TYPE: cred_type}
@@ -539,12 +539,11 @@ class CSGClient:
         The validity of the session won't be checked
         `initialize()` needs to be called for the client to be usable
         """
-        for k in (ATTR_AUTH_TOKEN, ATTR_LOGIN_TYPE):
+        for k in (ATTR_AUTH_TOKEN,):
             if not data.get(k):
                 raise ValueError(f"missing parameter: {k}")
         client = CSGClient(
             auth_token=data[ATTR_AUTH_TOKEN],
-            login_type=LoginType(data[ATTR_LOGIN_TYPE]),
         )
         return client
 
@@ -552,13 +551,11 @@ class CSGClient:
         """Dump the session to dict"""
         return {
             ATTR_AUTH_TOKEN: self.auth_token,
-            ATTR_LOGIN_TYPE: self.login_type.value,
         }
 
-    def set_authentication_params(self, auth_token: str, login_type: LoginType):
+    def set_authentication_params(self, auth_token: str):
         """Set self.auth_token and client generated cookies"""
         self.auth_token = auth_token
-        self.login_type = login_type
 
     def initialize(self):
         """Initialize the client"""
@@ -573,12 +570,11 @@ class CSGClient:
             return False
         return True
 
-    def logout(self):
+    def logout(self, login_type: LoginType):
         """Logout and reset identifier, token etc."""
-        self.api_logout(LOGON_CHANNEL_HANDHELD_HALL, self.login_type.value)
-        self.auth_token = ""
-        self.login_type = None
-        self.customer_number = ""
+        self.api_logout(LOGON_CHANNEL_HANDHELD_HALL, login_type)
+        self.auth_token = None
+        self.customer_number = None
 
     # end utility functions
 
