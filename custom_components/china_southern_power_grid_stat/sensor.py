@@ -22,6 +22,7 @@ from homeassistant.const import (
     UnitOfEnergy,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -38,7 +39,6 @@ from .const import (
     ATTR_KEY_THIS_YEAR_BY_MONTH,
     CONF_AUTH_TOKEN,
     CONF_ELE_ACCOUNTS,
-    CONF_LOGIN_TYPE,
     CONF_SETTINGS,
     CONF_UPDATE_INTERVAL,
     DATA_KEY_LAST_UPDATE_DAY,
@@ -63,7 +63,6 @@ from .const import (
     SUFFIX_THIS_YEAR_COST,
     SUFFIX_THIS_YEAR_KWH,
     SUFFIX_YESTERDAY_KWH,
-    VALUE_CSG_LOGIN_TYPE_PWD,
 )
 from .csg_client import (
     CSGAPIError,
@@ -78,7 +77,6 @@ from .csg_client import (
     WF_ATTR_LADDER_START_DATE,
     WF_ATTR_LADDER_TARIFF,
 )
-from .utils import async_refresh_login_and_update_config
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -358,25 +356,24 @@ class CSGCoordinator(DataUpdateCoordinator):
         self._gathered_data = {}
 
     async def _async_refresh_client(self):
-        """Refresh the client."""
+        """Refresh the client, update the user data.
+        It cannot re-login if the session is invalidated.
+        """
         _LOGGER.debug("Refreshing client")
         self._client = await self.hass.async_add_executor_job(
             CSGClient.load,
             {
                 CONF_AUTH_TOKEN: self._config[CONF_AUTH_TOKEN],
-                CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
             },
         )
         logged_in = await self.hass.async_add_executor_job(
             self._client.verify_login,
         )
         if not logged_in:
-            self._client = await async_refresh_login_and_update_config(
-                self._client, self.hass, self.config_entry
-            )
-            _LOGGER.debug("Client refreshed")
-        else:
-            _LOGGER.debug("Session still valid")
+            _LOGGER.warning(f"{self._config[CONF_USERNAME]}: Login expired")
+            raise ConfigEntryAuthFailed("Login expired")
+
+        _LOGGER.debug(f"{self._config[CONF_USERNAME]}: Session still valid")
         await self.hass.async_add_executor_job(self._client.initialize)
 
     async def _async_fetch(self, func: callable, *args, **kwargs) -> (bool, tuple):
@@ -866,11 +863,13 @@ class CSGCoordinator(DataUpdateCoordinator):
         self._last_year = last_year
         self._last_month_ym = last_month_ym
 
-        # for last month and last year data, they won't change over a long period of time - so we could use cache
+        # for last month and last year data, they won't change over a long period of time
+        # so we could use cache
         #
         # update policy for last month:
-        # for the first <LAST_MONTH_UPDATE_DAY_THRESHOLD> days of a month, update every `update_interval`
-        # for the rest of the time, do not update
+        # for the first <LAST_MONTH_UPDATE_DAY_THRESHOLD> days of a month,
+        # update every `update_interval`.
+        # for the rest of the time, do not update.
 
         # update policy for last year:
         # for the first <LAST_YEAR_UPDATE_DAY_THRESHOLD> days of Jan, update daily at first update
@@ -956,6 +955,7 @@ class CSGCoordinator(DataUpdateCoordinator):
         # _LOGGER.debug("Coordinator update interval: %d", self.update_interval.seconds)
         _LOGGER.debug("Coordinator update started")
         start_time = time.time()
+
         await self._async_refresh_client()
         for account_number, account_data in self._config[CONF_ELE_ACCOUNTS].items():
             self._gathered_data[account_number] = {}

@@ -8,7 +8,7 @@ Steps:
 """
 from __future__ import annotations
 
-import asyncio
+import copy
 import logging
 import time
 from typing import Any
@@ -16,9 +16,9 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry, entity_registry
 from requests import RequestException
 
@@ -28,12 +28,12 @@ from .const import (
     ABORT_NO_ACCOUNT_TO_DELETE,
     CONF_ACCOUNT_NUMBER,
     CONF_ACTION,
-    CONF_VERIFICATION_CODE,
     CONF_AUTH_TOKEN,
     CONF_ELE_ACCOUNTS,
     CONF_GENERAL_ERROR,
     CONF_LOGIN_TYPE,
     CONF_SETTINGS,
+    CONF_SMS_CODE,
     CONF_UPDATED_AT,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
@@ -42,47 +42,27 @@ from .const import (
     ERROR_INVALID_AUTH,
     ERROR_UNKNOWN,
     STEP_ADD_ACCOUNT,
+    STEP_ALI_QR_LOGIN,
+    STEP_CSG_QR_LOGIN,
     STEP_INIT,
     STEP_REMOVE_ACCOUNT,
     STEP_SETTINGS,
+    STEP_SMS_LOGIN,
+    STEP_SMS_PWD_LOGIN,
     STEP_USER,
-    VALUE_CSG_LOGIN_TYPE_PWD,
+    STEP_VALIDATE_SMS_CODE,
+    STEP_WX_QR_LOGIN,
 )
-from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials
+from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials, LoginType
 
 _LOGGER = logging.getLogger(__name__)
-
-def authenticate_csg(username: str, password: str, code: str) -> CSGClient:
-    """use username and password combination to authenticate"""
-    client = CSGClient()
-    try:
-        client.authenticate(username, password, code)
-    except InvalidCredentials as exc:
-        _LOGGER.error("Authentication failed: %s", exc)
-        raise InvalidAuth from exc
-    except RequestException as exc:
-        raise CannotConnect from exc
-    return client
-
-
-async def validate_input(
-    hass: HomeAssistant, data: dict[str, str]
-) -> dict[str, Any] | None:
-    """Validate the credentials (login)"""
-
-    client = await hass.async_add_executor_job(
-        authenticate_csg, data[CONF_USERNAME], data[CONF_PASSWORD], data[CONF_VERIFICATION_CODE]
-    )
-    return client.dump()
-
-
 
 
 class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for China Southern Power Grid Statistics."""
 
     VERSION = 1
-    reauth_entry: config_entries.ConfigEntry | None = None
+    _reauth_entry: config_entries.ConfigEntry | None = None
 
     @staticmethod
     @callback
@@ -91,118 +71,183 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
         return CSGOptionsFlowHandler(config_entry)
-    
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """
         Handle the initial step.
-        Login and get all electricity accounts for later use
+        Let user choose the login method.
         """
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_USERNAME): str,
-                vol.Required(CONF_PASSWORD): str,
-            }
+        self.context["user_data"] = {}
+        return self.async_show_menu(
+            step_id=STEP_USER,
+            menu_options=[
+                STEP_SMS_LOGIN,
+                STEP_SMS_PWD_LOGIN,
+                STEP_CSG_QR_LOGIN,
+                STEP_WX_QR_LOGIN,
+                STEP_ALI_QR_LOGIN,
+            ],
         )
 
-        if user_input is None:
-            return self.async_show_form(step_id=STEP_USER, data_schema=schema)
-
-        # Initialize the client
-        client = CSGClient()
-
-        errors = {}
-        try:
-            # Send SMS verification code after receiving username and password
-            await asyncio.to_thread(client.api_send_login_sms, user_input[CONF_USERNAME])
-
-            # Save username and password for the next step (verification)
-            self.context["user_data"] = {
-                CONF_USERNAME: user_input[CONF_USERNAME],
-                CONF_PASSWORD: user_input[CONF_PASSWORD],
-            }
-
-            # Move to the verification step
-            return await self.async_step_verification()
-        
-        except RequestException:
-            errors[CONF_GENERAL_ERROR] = ERROR_CANNOT_CONNECT
-        except InvalidAuth:
-            errors[CONF_GENERAL_ERROR] = ERROR_INVALID_AUTH
-        except Exception:
-            _LOGGER.exception("Unexpected exception during login")
-            errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
-
-        return self.async_show_form(step_id=STEP_USER, data_schema=schema, errors=errors)
-
-    async def async_step_verification(
+    async def async_step_sms_login(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """
-        Second step: input verification code and verify it with the server.
-        """
+        """Handle SMS login step."""
+        if user_input is None:
+            # initial step, need phone number to send SMS code
+            return self.async_show_form(
+                step_id=STEP_SMS_LOGIN,
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(CONF_USERNAME): vol.All(
+                            str, vol.Length(min=11, max=11)
+                        )
+                    }
+                ),
+            )
+        self.context["user_data"][CONF_USERNAME] = user_input[CONF_USERNAME]
+        self.context["user_data"][CONF_PASSWORD] = ""
+        self.context["user_data"][CONF_LOGIN_TYPE] = LoginType.LOGIN_TYPE_SMS
+        return await self.async_step_validate_sms_code()
+
+    async def async_step_sms_pwd_login(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle SMS and password login step."""
+        if user_input is None:
+            return self.async_show_form(
+                step_id=STEP_SMS_PWD_LOGIN,
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(CONF_USERNAME): vol.All(
+                            str, vol.Length(min=11, max=11)
+                        ),
+                        vol.Required(CONF_PASSWORD): vol.All(
+                            str, vol.Length(min=8, max=16)
+                        ),  # as shown on CSG web login page
+                    }
+                ),
+            )
+        self.context["user_data"][CONF_USERNAME] = user_input[CONF_USERNAME]
+        self.context["user_data"][CONF_PASSWORD] = user_input[CONF_PASSWORD]
+        self.context["user_data"][CONF_LOGIN_TYPE] = LoginType.LOGIN_TYPE_PWD_AND_SMS
+        return await self.async_step_validate_sms_code()
+
+    async def async_step_validate_sms_code(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle SMS code validation step, for both SMS and SMS+password login."""
         schema = vol.Schema(
             {
-                vol.Required(CONF_VERIFICATION_CODE): str,
+                vol.Required(CONF_SMS_CODE): vol.All(str, vol.Length(min=6, max=6)),
             }
         )
+        client: CSGClient = CSGClient()
 
         if user_input is None:
-            # First time in this step
-            return self.async_show_form(step_id="verification", data_schema=schema)
+            errors = {}
+            error_detail = ""
+            try:
+                await self.hass.async_add_executor_job(
+                    client.api_send_login_sms, self.context["user_data"][CONF_USERNAME]
+                )
+            except RequestException:
+                errors[CONF_GENERAL_ERROR] = ERROR_CANNOT_CONNECT
+            except Exception as ge:
+                _LOGGER.exception("Unexpected exception when sending sms code")
+                errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
+                error_detail = str(ge)
+            else:
+                return self.async_show_form(
+                    step_id=STEP_VALIDATE_SMS_CODE,
+                    data_schema=schema,
+                    description_placeholders={
+                        "phone_no": self.context["user_data"][CONF_USERNAME]
+                    },
+                )
+            return self.async_show_form(
+                step_id=STEP_VALIDATE_SMS_CODE,
+                data_schema=schema,
+                errors=errors,
+                description_placeholders={"error_detail": error_detail},
+            )
 
-        # Retrieve saved username and password from the context
+        # sms code is present, validate with api
         username = self.context["user_data"][CONF_USERNAME]
         password = self.context["user_data"][CONF_PASSWORD]
-        verification_code = user_input[CONF_VERIFICATION_CODE]
-
-        self.context["user_data"] = {
-            CONF_USERNAME: username,
-            CONF_PASSWORD: password,
-            CONF_VERIFICATION_CODE: verification_code,
-        }
-
-        client = CSGClient()
+        login_type: LoginType = self.context["user_data"][CONF_LOGIN_TYPE]
+        sms_code = user_input[CONF_SMS_CODE]
 
         errors = {}
+        error_detail = ""
         try:
-            # Attempt to authenticate using the verification code
-            session_data = await self.hass.async_add_executor_job(
-                client.api_login_with_password, username, password, verification_code
-            )
+            if login_type == LoginType.LOGIN_TYPE_SMS:
+                auth_token = await self.hass.async_add_executor_job(
+                    client.api_login_with_sms_code,
+                    username,
+                    sms_code,
+                )
+            elif login_type == LoginType.LOGIN_TYPE_PWD_AND_SMS:
+                auth_token = await self.hass.async_add_executor_job(
+                    client.api_login_with_password_and_sms_code,
+                    username,
+                    password,
+                    sms_code,
+                )
+            else:
+                raise ValueError(
+                    f"Invalid login type for step {STEP_VALIDATE_SMS_CODE}: {login_type}"
+                )
+        except RequestException:
+            errors[CONF_GENERAL_ERROR] = ERROR_CANNOT_CONNECT
+        except InvalidCredentials as ice:
+            errors[CONF_GENERAL_ERROR] = ERROR_INVALID_AUTH
+            error_detail = str(ice)
+        except Exception as ge:
+            _LOGGER.exception("Unexpected exception during login validation")
+            errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
+            error_detail = str(ge)
+        else:
+            data = {
+                CONF_USERNAME: username,
+                CONF_PASSWORD: password,
+                CONF_LOGIN_TYPE: login_type,
+                CONF_AUTH_TOKEN: auth_token,
+                CONF_ELE_ACCOUNTS: {},
+                CONF_SETTINGS: {
+                    CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                },
+                CONF_UPDATED_AT: str(int(time.time() * 1000)),
+            }
+            # handle normal creation and reauth
+            if self._reauth_entry:
+                # save the old config and only update the auth related data
+                old_config = copy.deepcopy(self._reauth_entry.data)
+                data[CONF_ELE_ACCOUNTS] = old_config[CONF_ELE_ACCOUNTS]
+                data[CONF_SETTINGS] = old_config[CONF_SETTINGS]
+                self.hass.config_entries.async_update_entry(
+                    self._reauth_entry, data=data
+                )
+                await self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
+                self._reauth_entry = None
+                return self.async_abort(reason="reauth_successful")
 
-            _LOGGER.debug("session data: %s", session_data)
-
-            # Successful authentication, create the entry
             return self.async_create_entry(
                 title=f"CSG-{username}",
-                data={
-                    CONF_USERNAME: username,
-                    CONF_PASSWORD: password,
-                    CONF_AUTH_TOKEN: session_data,
-                    CONF_ELE_ACCOUNTS: {},
-                    CONF_SETTINGS: {
-                        CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
-                    },
-                    CONF_UPDATED_AT: str(int(time.time() * 1000)),
-                },
+                data=data,
             )
-
-        except CannotConnect:
-            errors[CONF_GENERAL_ERROR] = ERROR_CANNOT_CONNECT
-        except InvalidAuth:
-            errors[CONF_GENERAL_ERROR] = ERROR_INVALID_AUTH
-        except Exception:
-            _LOGGER.exception("Unexpected exception during verification")
-            errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
-
-        return self.async_show_form(step_id="verification", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id=STEP_VALIDATE_SMS_CODE,
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"error_detail": error_detail},
+        )
 
     async def async_step_reauth(self, user_input=None):
         """Perform reauth upon an API authentication error."""
-        self.reauth_entry = self.hass.config_entries.async_get_entry(
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
             self.context["entry_id"]
         )
         return await self.async_step_reauth_confirm()
@@ -293,18 +338,12 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         client = CSGClient.load(
             {
                 CONF_AUTH_TOKEN: self.config_entry.data[CONF_AUTH_TOKEN],
-                CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
             }
         )
         logged_in = await self.hass.async_add_executor_job(client.verify_login)
         if not logged_in:
-            # token expired, re-authenticate
-            await self.hass.async_add_executor_job(
-                client.authenticate,
-                self.config_entry.data[CONF_USERNAME],
-                self.config_entry.data[CONF_PASSWORD],
-                self.config_entry.data[CONF_VERIFICATION_CODE],
-            )
+            # token expired
+            raise ConfigEntryAuthFailed("Login expired")
         await self.hass.async_add_executor_job(client.initialize)
 
         accounts = await self.hass.async_add_executor_job(
@@ -436,11 +475,3 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
             title="",
             data={},
         )
-
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate there is invalid auth."""

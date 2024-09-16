@@ -14,9 +14,16 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_SETTINGS = "settings"
 CONF_UPDATED_AT = "updated_at"
 CONF_ACTION = "action"
-CONF_VERIFICATION_CODE = "code"
+CONF_SMS_CODE = "sms_code"
 
 STEP_USER = "user"
+STEP_SMS_LOGIN = "sms_login"
+STEP_SMS_PWD_LOGIN = "sms_pwd_login"
+STEP_VALIDATE_SMS_CODE = "validate_sms_code"
+STEP_CSG_QR_LOGIN = "csg_qr_login"
+STEP_WX_QR_LOGIN = "wx_qr_login"
+STEP_ALI_QR_LOGIN = "ali_qr_login"
+STEP_QR_LOGIN = "qr_login"
 STEP_INIT = "init"
 STEP_SETTINGS = "settings"
 STEP_ADD_ACCOUNT = "add_account"
@@ -32,7 +39,7 @@ ERROR_INVALID_AUTH = "invalid_auth"
 ERROR_UNKNOWN = "unknown"
 
 # api
-VALUE_CSG_LOGIN_TYPE_PWD = "10"
+
 
 # sensor updates
 SUFFIX_BAL = "balance"
@@ -70,6 +77,7 @@ SETTING_UPDATE_TIMEOUT = 60
 SETTING_LAST_MONTH_UPDATE_DAY_THRESHOLD = 3
 # the first n days in a year that will get data of last year
 SETTING_LAST_YEAR_UPDATE_DAY_THRESHOLD = 7
+
 
 # defaults
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=4).seconds

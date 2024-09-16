@@ -7,13 +7,13 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import (
     CONF_AUTH_TOKEN,
     CONF_LOGIN_TYPE,
     CONF_UPDATED_AT,
     DOMAIN,
-    VALUE_CSG_LOGIN_TYPE_PWD,
 )
 from .csg_client import (
     CSGAPIError,
@@ -26,7 +26,6 @@ from .sensor import (
     CSGCostSensor,
     CSGEnergySensor,
 )
-from .utils import async_refresh_login_and_update_config
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 _LOGGER = logging.getLogger(__name__)
@@ -40,11 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     client = CSGClient.load(
         {
             CONF_AUTH_TOKEN: entry.data[CONF_AUTH_TOKEN],
-            CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
         }
     )
     if not await hass.async_add_executor_job(client.verify_login):
-        await async_refresh_login_and_update_config(client, hass, entry)
+        raise ConfigEntryAuthFailed("Login expired")
 
     hass.data[DOMAIN][entry.entry_id] = {}
 
@@ -71,11 +69,10 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         client = CSGClient.load(
             {
                 CONF_AUTH_TOKEN: entry.data[CONF_AUTH_TOKEN],
-                CONF_LOGIN_TYPE: VALUE_CSG_LOGIN_TYPE_PWD,
             }
         )
         if client.verify_login():
-            client.logout()
+            client.logout(entry.data[CONF_LOGIN_TYPE])
             _LOGGER.info("CSG account %s logged out", entry.data[CONF_USERNAME])
 
     await hass.async_add_executor_job(client_logout)

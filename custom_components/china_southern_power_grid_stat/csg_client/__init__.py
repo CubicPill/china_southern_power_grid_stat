@@ -222,7 +222,13 @@ class CSGClient:
         Function to make the http request to api endpoints
         can automatically add authentication header(s)
         """
-        _LOGGER.debug("_make_request: %s, %s, %s, %s", path, payload, with_auth, method)
+        _LOGGER.debug(
+            "_make_request: %s, data=%s, auth=%s, method=%s",
+            path,
+            payload,
+            with_auth,
+            method,
+        )
         url = base_path + path
         headers = copy(self._common_headers)
         if custom_headers:
