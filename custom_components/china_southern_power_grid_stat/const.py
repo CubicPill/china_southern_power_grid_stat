@@ -31,11 +31,9 @@ STEP_VALIDATE_QR_LOGIN = "validate_qr_login"
 STEP_INIT = "init"
 STEP_SETTINGS = "settings"
 STEP_ADD_ACCOUNT = "add_account"
-STEP_REMOVE_ACCOUNT = "remove_account"
 
 ABORT_NO_ACCOUNT = "no_account"
 ABORT_ALL_ADDED = "all_added"
-ABORT_NO_ACCOUNT_TO_DELETE = "no_account_to_delete"
 
 CONF_GENERAL_ERROR = "base"
 ERROR_CANNOT_CONNECT = "cannot_connect"

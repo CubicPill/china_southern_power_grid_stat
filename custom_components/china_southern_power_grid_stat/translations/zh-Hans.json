@@ -24,8 +24,6 @@
             },
             "sms_login": {
                 "data": {
-                    "code": "\u77ed\u4fe1\u9a8c\u8bc1\u7801",
-                    "send_code": "\u53d1\u9001\u77ed\u4fe1\u9a8c\u8bc1\u7801",
                     "username": "\u624b\u673a\u53f7"
                 },
                 "description": "\u4f7f\u7528\u624b\u673a\u53f7\u548c\u77ed\u4fe1\u9a8c\u8bc1\u7801\u767b\u5f55",
@@ -33,9 +31,7 @@
             },
             "sms_pwd_login": {
                 "data": {
-                    "code": "\u77ed\u4fe1\u9a8c\u8bc1\u7801",
                     "password": "\u5bc6\u7801",
-                    "send_code": "\u53d1\u9001\u77ed\u4fe1\u9a8c\u8bc1\u7801",
                     "username": "\u624b\u673a\u53f7"
                 },
                 "description": "\u4f7f\u7528\u624b\u673a\u53f7\u3001\u5bc6\u7801\u548c\u77ed\u4fe1\u9a8c\u8bc1\u7801\u767b\u5f55",
@@ -52,16 +48,9 @@
                 },
                 "title": "\u9009\u62e9\u767b\u5f55\u65b9\u5f0f"
             },
-            "validate_qr_login": {
-                "description": "\u63cf\u8ff0placeholder",
-                "title": "\u626b\u7801\u767b\u5f55\u7ed3\u679c"
-            },
             "validate_sms_code": {
                 "data": {
-                    "code": "\u77ed\u4fe1\u9a8c\u8bc1\u7801",
-                    "password": "\u5bc6\u7801",
-                    "send_code": "\u53d1\u9001\u77ed\u4fe1\u9a8c\u8bc1\u7801",
-                    "username": "\u624b\u673a\u53f7"
+                    "code": "\u77ed\u4fe1\u9a8c\u8bc1\u7801"
                 },
                 "description": "\u9a8c\u8bc1\u7801\u5df2\u53d1\u9001\u5230: {phone_no}",
                 "title": "\u8f93\u5165\u77ed\u4fe1\u9a8c\u8bc1\u7801"
@@ -71,8 +60,7 @@
     "options": {
         "abort": {
             "all_added": "\u6ca1\u6709\u53ef\u6dfb\u52a0\u5230\u6b64\u96c6\u6210\u7684\u7f34\u8d39\u53f7",
-            "no_account": "\u8d26\u6237\u672a\u7ed1\u5b9a\u7f34\u8d39\u53f7",
-            "no_account_to_delete": "\u6b64\u96c6\u6210\u672a\u7ed1\u5b9a\u7f34\u8d39\u53f7"
+            "no_account": "\u8d26\u6237\u672a\u7ed1\u5b9a\u7f34\u8d39\u53f7"
         },
         "step": {
             "add_account": {

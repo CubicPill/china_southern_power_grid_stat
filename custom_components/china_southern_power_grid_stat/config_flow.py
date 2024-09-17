@@ -24,7 +24,6 @@ from requests import RequestException
 from .const import (
     ABORT_ALL_ADDED,
     ABORT_NO_ACCOUNT,
-    ABORT_NO_ACCOUNT_TO_DELETE,
     CONF_ACCOUNT_NUMBER,
     CONF_ACTION,
     CONF_AUTH_TOKEN,
@@ -48,7 +47,6 @@ from .const import (
     STEP_CSG_QR_LOGIN,
     STEP_INIT,
     STEP_QR_LOGIN,
-    STEP_REMOVE_ACCOUNT,
     STEP_SETTINGS,
     STEP_SMS_LOGIN,
     STEP_SMS_PWD_LOGIN,
@@ -392,7 +390,6 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(CONF_ACTION, default=STEP_ADD_ACCOUNT): vol.In(
                     {
                         STEP_ADD_ACCOUNT: "添加已绑定的缴费号",
-                        STEP_REMOVE_ACCOUNT: "移除缴费号实体",
                         STEP_SETTINGS: "参数设置",
                     }
                 ),
@@ -401,8 +398,6 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input:
             if user_input[CONF_ACTION] == STEP_ADD_ACCOUNT:
                 return await self.async_step_add_account()
-            if user_input[CONF_ACTION] == STEP_REMOVE_ACCOUNT:
-                return await self.async_step_remove_account()
             if user_input[CONF_ACTION] == STEP_SETTINGS:
                 return await self.async_step_settings()
         return self.async_show_form(step_id=STEP_INIT, data_schema=schema)
@@ -490,49 +485,6 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id=STEP_ADD_ACCOUNT,
             data_schema=schema,
-        )
-
-    async def async_step_remove_account(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """remove config and entities"""
-        if not self.config_entry.data[CONF_ELE_ACCOUNTS]:
-            return self.async_abort(reason=ABORT_NO_ACCOUNT_TO_DELETE)
-
-        selections = {}
-        for _, account_data in self.config_entry.data[CONF_ELE_ACCOUNTS].items():
-            account = CSGElectricityAccount.load(account_data)
-            selections[
-                account.account_number
-            ] = f"{account.account_number} ({account.user_name} {account.address})"
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_ACCOUNT_NUMBER): vol.In(selections),
-            }
-        )
-        if user_input is None:
-            return self.async_show_form(step_id=STEP_REMOVE_ACCOUNT, data_schema=schema)
-
-        account_num_to_remove = user_input[CONF_ACCOUNT_NUMBER]
-
-        new_data = self.config_entry.data.copy()
-        new_data[CONF_ELE_ACCOUNTS].pop(account_num_to_remove)
-        new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
-        self.hass.config_entries.async_update_entry(
-            self.config_entry,
-            data=new_data,
-        )
-        _LOGGER.info(
-            "Removed ele account from %s: %s",
-            self.config_entry.data[CONF_USERNAME],
-            account_num_to_remove,
-        )
-        _LOGGER.info("Reloading entry because of deleted account")
-        await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-
-        return self.async_create_entry(
-            title="",
-            data={},
         )
 
     async def async_step_settings(

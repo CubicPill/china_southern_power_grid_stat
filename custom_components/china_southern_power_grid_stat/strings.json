@@ -16,9 +16,7 @@
         "title": "登录南方电网",
         "description": "使用手机号和短信验证码登录",
         "data": {
-          "username": "手机号",
-          "code": "短信验证码",
-          "send_code": "发送短信验证码"
+          "username": "手机号"
         }
       },
       "sms_pwd_login": {
@@ -26,19 +24,14 @@
         "description": "使用手机号、密码和短信验证码登录",
         "data": {
           "username": "手机号",
-          "password": "密码",
-          "code": "短信验证码",
-          "send_code": "发送短信验证码"
+          "password": "密码"
         }
       },
       "validate_sms_code": {
         "title": "输入短信验证码",
         "description": "验证码已发送到: {phone_no}",
         "data": {
-          "username": "手机号",
-          "password": "密码",
-          "code": "短信验证码",
-          "send_code": "发送短信验证码"
+          "code": "短信验证码"
         }
       },
       "qr_login": {
@@ -47,10 +40,6 @@
         "data": {
           "refresh_qr_code": "刷新二维码"
         }
-      },
-      "validate_qr_login": {
-        "title": "扫码登录结果",
-        "description": "描述placeholder"
       },
       "reauth_confirm": {
         "title": "重新登录账号",
@@ -88,8 +77,7 @@
     },
     "abort": {
       "no_account": "账户未绑定缴费号",
-      "all_added": "没有可添加到此集成的缴费号",
-      "no_account_to_delete": "此集成未绑定缴费号"
+      "all_added": "没有可添加到此集成的缴费号"
     }
   }
 }

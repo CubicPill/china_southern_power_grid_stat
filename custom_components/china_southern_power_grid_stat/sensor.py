@@ -195,7 +195,13 @@ async def async_setup_entry(
         all_sensors.extend(sensors)
 
     async_add_entities(all_sensors)
-    await coordinator.async_config_entry_first_refresh()
+    _LOGGER.debug(f"created {len(all_sensors)} sensors for config {config_entry.title}")
+    # Schedule the first update to run in the background
+    config_entry.async_create_task(
+        hass,
+        coordinator.async_config_entry_first_refresh(),
+        f"{config_entry.title}_first_update",
+    )
 
 
 class CSGBaseSensor(
