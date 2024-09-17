@@ -114,6 +114,7 @@ class CSGElectricityAccount:
         area_code: str | None = None,
         ele_customer_id: str | None = None,
         metering_point_id: str | None = None,
+        metering_point_number: str | None = None,
         address: str | None = None,
         user_name: str | None = None,
     ) -> None:
@@ -130,6 +131,7 @@ class CSGElectricityAccount:
         # in fact one account may have multiple metering points,
         # however for individual users there should only be one
         self.metering_point_id = metering_point_id
+        self.metering_point_number = metering_point_number
 
         # for frontend display only
         self.address = address
@@ -142,6 +144,7 @@ class CSGElectricityAccount:
             ATTR_AREA_CODE: self.area_code,
             ATTR_ELE_CUSTOMER_ID: self.ele_customer_id,
             ATTR_METERING_POINT_ID: self.metering_point_id,
+            ATTR_METERING_POINT_NUMBER: self.metering_point_number,
             ATTR_ADDRESS: self.address,
             ATTR_USER_NAME: self.user_name,
         }
@@ -159,11 +162,14 @@ class CSGElectricityAccount:
         ):
             if k not in data:
                 raise ValueError(f"Missing key {k}")
+        # ATTR_METERING_POINT_NUMBER is added in later version, skip check here
+        # TODO: add ATTR_METERING_POINT_NUMBER to the check in the future
         account = CSGElectricityAccount(
             account_number=data[ATTR_ACCOUNT_NUMBER],
             area_code=data[ATTR_AREA_CODE],
             ele_customer_id=data[ATTR_ELE_CUSTOMER_ID],
             metering_point_id=data[ATTR_METERING_POINT_ID],
+            metering_point_number=data.get(ATTR_METERING_POINT_NUMBER),
             address=data[ATTR_ADDRESS],
             user_name=data[ATTR_USER_NAME],
         )
@@ -249,7 +255,11 @@ class CSGClient:
             json_str = json_str[json_str.find("{") : json_str.rfind("}") + 1]
             json_data = json.loads(json_str)
             response_data = json_data
-            _LOGGER.debug("_make_request: response: %s", json.dumps(response_data))
+            _LOGGER.debug(
+                "_make_request: %s, response: %s",
+                path,
+                json.dumps(response_data, ensure_ascii=False),
+            )
 
             # headers need to be returned since they may contain additional data
             return response.headers, response_data
@@ -417,7 +427,8 @@ class CSGClient:
                 {JSON_KEY_ELE_CUST_ID: ele_customer_id, JSON_KEY_AREA_CODE: area_code}
             ],
         }
-        custom_headers = {"funid": "100t002"}
+        # custom_headers = {"funid": "100t002"}
+        custom_headers = {}
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
         if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
             return resp_data[JSON_KEY_DATA]
@@ -439,7 +450,8 @@ class CSGClient:
             JSON_KEY_YEAR_MONTH: f"{year}{month:02d}",
             JSON_KEY_METERING_POINT_ID: metering_point_id,
         }
-        custom_headers = {"funid": "100t002"}
+        # custom_headers = {"funid": "100t002"}
+        custom_headers = {}
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
         if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
             return resp_data[JSON_KEY_DATA]
@@ -465,8 +477,53 @@ class CSGClient:
             JSON_KEY_YEAR_MONTH: f"{year}{month:02d}",
             JSON_KEY_METERING_POINT_ID: metering_point_id,
         }
-        custom_headers = {"funid": "100t002"}  # TODO: what does this do? region?
+        # custom_headers = {"funid": "100t002"}  # TODO: what does this do? region?
+        custom_headers = {}
         _, resp_data = self._make_request(path, payload, custom_headers=custom_headers)
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
+        self._handle_unsuccessful_response(path, resp_data)
+
+    def api_query_day_electric_and_temperature(
+        self,
+        year: int,
+        month: int,
+        area_code: str,
+        ele_customer_id: str,
+        metering_point_id: str,
+    ) -> dict:
+        """get power in kWh, hi/lo temperature by day in the given month"""
+        path = "charge/queryDayElectricAndTemperature"
+        payload = {
+            JSON_KEY_AREA_CODE: area_code,
+            JSON_KEY_ELE_CUST_ID: ele_customer_id,
+            JSON_KEY_YEAR_MONTH: f"{year}{month:02d}",
+            JSON_KEY_METERING_POINT_ID: metering_point_id,
+        }
+        _, resp_data = self._make_request(path, payload)
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
+        self._handle_unsuccessful_response(path, resp_data)
+
+    def api_query_electricity_calender(
+        self,
+        year: int,
+        month: int,
+        area_code: str,
+        ele_customer_id: str,
+        metering_point_id: str,
+        metering_point_number: str,
+    ) -> dict:
+        """get power in kWh, hi/lo/avg temperature by day in the given month"""
+        path = "charge/queryElectricityCalendar"
+        payload = {
+            JSON_KEY_AREA_CODE: area_code,
+            JSON_KEY_ELE_CUST_ID: ele_customer_id,
+            JSON_KEY_YEAR_MONTH: f"{year}{month:02d}",
+            JSON_KEY_METERING_POINT_ID: metering_point_id,
+            "deviceIdentif": metering_point_number,
+        }
+        _, resp_data = self._make_request(path, payload)
         if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
             return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
@@ -596,13 +653,17 @@ class CSGClient:
                 item[JSON_KEY_AREA_CODE], item["bindingId"]
             )
             metering_point_id = metering_point_data[0][JSON_KEY_METERING_POINT_ID]
+            metering_point_number = metering_point_data[0][
+                JSON_KEY_METERING_POINT_NUMBER
+            ]
             account = CSGElectricityAccount(
-                item["eleCustNumber"],
-                item[JSON_KEY_AREA_CODE],
-                item["bindingId"],
-                metering_point_id,
-                item["eleAddress"],
-                item["userName"],
+                account_number=item["eleCustNumber"],
+                area_code=item[JSON_KEY_AREA_CODE],
+                ele_customer_id=item["bindingId"],
+                metering_point_id=metering_point_id,
+                metering_point_number=metering_point_number,
+                address=item["eleAddress"],
+                user_name=item["userName"],
             )
             result.append(account)
         return result
@@ -735,6 +796,7 @@ class CSGClient:
         resp_data = self.api_query_day_electric_by_m_point_yesterday(
             account.area_code, account.ele_customer_id
         )
-        return float(resp_data["power"])
+        if resp_data["power"] is not None:
+            return float(resp_data["power"])
 
     # end high-level api wrappers

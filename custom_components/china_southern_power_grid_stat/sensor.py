@@ -30,6 +30,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
+from . import CONF_UPDATED_AT
 from .const import (
     ATTR_KEY_CURRENT_LADDER_START_DATE,
     ATTR_KEY_LAST_MONTH_BY_DAY,
@@ -68,6 +69,7 @@ from .csg_client import (
     CSGAPIError,
     CSGClient,
     CSGElectricityAccount,
+    JSON_KEY_METERING_POINT_NUMBER,
     NotLoggedIn,
     WF_ATTR_CHARGE,
     WF_ATTR_DATE,
@@ -193,8 +195,7 @@ async def async_setup_entry(
         all_sensors.extend(sensors)
 
     async_add_entities(all_sensors)
-
-    await coordinator.async_refresh()
+    await coordinator.async_config_entry_first_refresh()
 
 
 class CSGBaseSensor(
@@ -434,7 +435,7 @@ class CSGCoordinator(DataUpdateCoordinator):
             self._client.get_yesterday_kwh,
             account,
         )
-        if success:
+        if success and result is not None:
             yesterday_kwh = result
             _LOGGER.debug(
                 "Updated yesterday's kwh for account %s: %s",
@@ -956,11 +957,42 @@ class CSGCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Coordinator update started")
         start_time = time.time()
 
+        metering_point_data = {}
+        config_entry_need_update = False
         await self._async_refresh_client()
         for account_number, account_data in self._config[CONF_ELE_ACCOUNTS].items():
             self._gathered_data[account_number] = {}
             account = CSGElectricityAccount.load(account_data)
+            # handling the addition of metering point number
+            if not account.metering_point_number:
+                if not metering_point_data:
+                    ok, data = await self._async_fetch(
+                        self._client.api_get_metering_point(
+                            account.area_code, account.ele_customer_id
+                        )
+                    )
+                    if ok:
+                        metering_point_data = data
+                if metering_point_data:
+                    for mp in metering_point_data:
+                        if mp["eleCustNumber"] == account.account_number:
+                            account.metering_point_number = mp[
+                                JSON_KEY_METERING_POINT_NUMBER
+                            ]
+                            self._config[CONF_ELE_ACCOUNTS][
+                                account_number
+                            ] = account.dump()
+                            config_entry_need_update = True
+                            break
+
             await self._async_update_account_data(account)
+        if config_entry_need_update:
+            self._config[CONF_UPDATED_AT] = str(int(time.time() * 1000))
+            self.hass.config_entries.async_update_entry(
+                self.hass.config_entries.async_get_entry(self._config_entry_id),
+                data=self._config,
+            )
+            _LOGGER.debug("Updated accounts with metering point number")
         _LOGGER.debug("Coordinator update took %s seconds", time.time() - start_time)
         self.hass.data[DOMAIN][self._config_entry_id][
             DATA_KEY_LAST_UPDATE_DAY

@@ -64,11 +64,14 @@ RESP_STA_QR_TIMEOUT = "00010001"
 # from packet capture
 RESP_STA_LOGIN_WRONG_CREDENTIAL = "00010002"
 
+QR_EXPIRY_SECONDS = 300
+
 # account object serialisation and deserialisation
 ATTR_ACCOUNT_NUMBER = "account_number"
 ATTR_AREA_CODE = "area_code"
 ATTR_ELE_CUSTOMER_ID = "ele_customer_id"
 ATTR_METERING_POINT_ID = "metering_point_id"
+ATTR_METERING_POINT_NUMBER = "metering_point_number"
 ATTR_ADDRESS = "address"
 ATTR_USER_NAME = "user_name"
 ATTR_AUTH_TOKEN = "auth_token"
@@ -89,6 +92,7 @@ JSON_KEY_PARAM = "param"
 JSON_KEY_ACCT_ID = "acctId"
 JSON_KEY_ELE_CUST_ID = "eleCustId"
 JSON_KEY_METERING_POINT_ID = "meteringPointId"
+JSON_KEY_METERING_POINT_NUMBER = "meteringPointNumber"
 JSON_KEY_YEAR_MONTH = "yearMonth"
 
 # for wrapper functions
