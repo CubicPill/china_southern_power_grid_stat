@@ -7,9 +7,17 @@
         "error": {
             "cannot_connect": "\u7f51\u7edc\u5f02\u5e38",
             "invalid_auth": "\u767b\u5f55\u4fe1\u606f\u65e0\u6548",
+            "qr_not_scanned": "\u626b\u63cf\u4e8c\u7ef4\u7801\u5e76\u786e\u8ba4\u767b\u5f55",
             "unknown": "\u672a\u77e5\u9519\u8bef: {error_detail}"
         },
         "step": {
+            "qr_login": {
+                "data": {
+                    "refresh_qr_code": "\u5237\u65b0\u4e8c\u7ef4\u7801"
+                },
+                "description": "{description}",
+                "title": "\u626b\u7801\u767b\u5f55"
+            },
             "reauth_confirm": {
                 "description": "\u767b\u5f55\u72b6\u6001\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55",
                 "title": "\u91cd\u65b0\u767b\u5f55\u8d26\u53f7"
@@ -43,6 +51,10 @@
                     "wx_qr_login": "\u5fae\u4fe1\u626b\u7801\u767b\u5f55"
                 },
                 "title": "\u9009\u62e9\u767b\u5f55\u65b9\u5f0f"
+            },
+            "validate_qr_login": {
+                "description": "\u63cf\u8ff0placeholder",
+                "title": "\u626b\u7801\u767b\u5f55\u7ed3\u679c"
             },
             "validate_sms_code": {
                 "data": {

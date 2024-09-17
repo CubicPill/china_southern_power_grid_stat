@@ -19,7 +19,6 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import device_registry, entity_registry
 from requests import RequestException
 
 from .const import (
@@ -32,6 +31,7 @@ from .const import (
     CONF_ELE_ACCOUNTS,
     CONF_GENERAL_ERROR,
     CONF_LOGIN_TYPE,
+    CONF_REFRESH_QR_CODE,
     CONF_SETTINGS,
     CONF_SMS_CODE,
     CONF_UPDATED_AT,
@@ -40,11 +40,14 @@ from .const import (
     DOMAIN,
     ERROR_CANNOT_CONNECT,
     ERROR_INVALID_AUTH,
+    ERROR_QR_NOT_SCANNED,
     ERROR_UNKNOWN,
+    LOGIN_TYPE_TO_QR_APP_NAME,
     STEP_ADD_ACCOUNT,
     STEP_ALI_QR_LOGIN,
     STEP_CSG_QR_LOGIN,
     STEP_INIT,
+    STEP_QR_LOGIN,
     STEP_REMOVE_ACCOUNT,
     STEP_SETTINGS,
     STEP_SMS_LOGIN,
@@ -53,7 +56,13 @@ from .const import (
     STEP_VALIDATE_SMS_CODE,
     STEP_WX_QR_LOGIN,
 )
-from .csg_client import CSGClient, CSGElectricityAccount, InvalidCredentials, LoginType
+from .csg_client import (
+    CSGClient,
+    CSGElectricityAccount,
+    InvalidCredentials,
+    LOGIN_TYPE_TO_QR_CODE_TYPE,
+    LoginType,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -101,8 +110,9 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 step_id=STEP_SMS_LOGIN,
                 data_schema=vol.Schema(
                     {
+                        # TODO hardcoded string, should be a reference to strings.json?
                         vol.Required(CONF_USERNAME): vol.All(
-                            str, vol.Length(min=11, max=11)
+                            str, vol.Length(min=11, max=11), msg="请输入11位手机号"
                         )
                     }
                 ),
@@ -122,10 +132,10 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data_schema=vol.Schema(
                     {
                         vol.Required(CONF_USERNAME): vol.All(
-                            str, vol.Length(min=11, max=11)
+                            str, vol.Length(min=11, max=11), msg="请输入11位手机号"
                         ),
                         vol.Required(CONF_PASSWORD): vol.All(
-                            str, vol.Length(min=8, max=16)
+                            str, vol.Length(min=8, max=16), msg="请输入8-16位登陆密码"
                         ),  # as shown on CSG web login page
                     }
                 ),
@@ -141,17 +151,21 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle SMS code validation step, for both SMS and SMS+password login."""
         schema = vol.Schema(
             {
-                vol.Required(CONF_SMS_CODE): vol.All(str, vol.Length(min=6, max=6)),
+                vol.Required(CONF_SMS_CODE): vol.All(
+                    str, vol.Length(min=6, max=6), msg="请输入6位短信验证码"
+                ),
             }
         )
         client: CSGClient = CSGClient()
+        username = self.context["user_data"][CONF_USERNAME]
 
         if user_input is None:
+            await self.check_and_set_unique_id(username)
             errors = {}
             error_detail = ""
             try:
                 await self.hass.async_add_executor_job(
-                    client.api_send_login_sms, self.context["user_data"][CONF_USERNAME]
+                    client.api_send_login_sms, username
                 )
             except RequestException:
                 errors[CONF_GENERAL_ERROR] = ERROR_CANNOT_CONNECT
@@ -163,9 +177,7 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_show_form(
                     step_id=STEP_VALIDATE_SMS_CODE,
                     data_schema=schema,
-                    description_placeholders={
-                        "phone_no": self.context["user_data"][CONF_USERNAME]
-                    },
+                    description_placeholders={"phone_no": username},
                 )
             return self.async_show_form(
                 step_id=STEP_VALIDATE_SMS_CODE,
@@ -175,7 +187,6 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         # sms code is present, validate with api
-        username = self.context["user_data"][CONF_USERNAME]
         password = self.context["user_data"][CONF_PASSWORD]
         login_type: LoginType = self.context["user_data"][CONF_LOGIN_TYPE]
         sms_code = user_input[CONF_SMS_CODE]
@@ -210,39 +221,140 @@ class CSGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors[CONF_GENERAL_ERROR] = ERROR_UNKNOWN
             error_detail = str(ge)
         else:
-            data = {
-                CONF_USERNAME: username,
-                CONF_PASSWORD: password,
-                CONF_LOGIN_TYPE: login_type,
-                CONF_AUTH_TOKEN: auth_token,
-                CONF_ELE_ACCOUNTS: {},
-                CONF_SETTINGS: {
-                    CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
-                },
-                CONF_UPDATED_AT: str(int(time.time() * 1000)),
-            }
-            # handle normal creation and reauth
-            if self._reauth_entry:
-                # save the old config and only update the auth related data
-                old_config = copy.deepcopy(self._reauth_entry.data)
-                data[CONF_ELE_ACCOUNTS] = old_config[CONF_ELE_ACCOUNTS]
-                data[CONF_SETTINGS] = old_config[CONF_SETTINGS]
-                self.hass.config_entries.async_update_entry(
-                    self._reauth_entry, data=data
-                )
-                await self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
-                self._reauth_entry = None
-                return self.async_abort(reason="reauth_successful")
-
-            return self.async_create_entry(
-                title=f"CSG-{username}",
-                data=data,
+            return await self.create_or_update_config_entry(
+                auth_token, login_type, password, username
             )
         return self.async_show_form(
             step_id=STEP_VALIDATE_SMS_CODE,
             data_schema=schema,
             errors=errors,
             description_placeholders={"error_detail": error_detail},
+        )
+
+    async def async_step_csg_qr_login(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """CSG APP QR Login"""
+        self.context["user_data"][CONF_LOGIN_TYPE] = LoginType.LOGIN_TYPE_CSG_QR
+        return await self.async_step_qr_login()
+
+    async def async_step_wx_qr_login(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """WeChat QR Login"""
+        self.context["user_data"][CONF_LOGIN_TYPE] = LoginType.LOGIN_TYPE_WX_QR
+        return await self.async_step_qr_login()
+
+    async def async_step_ali_qr_login(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """AliPay QR Login"""
+        self.context["user_data"][CONF_LOGIN_TYPE] = LoginType.LOGIN_TYPE_ALI_QR
+        return await self.async_step_qr_login()
+
+    async def async_step_qr_login(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle QR code login step."""
+        client: CSGClient = CSGClient()
+        if user_input is None:
+            # create QR code
+            login_type = self.context["user_data"][CONF_LOGIN_TYPE]
+            login_id, image_link = await self.hass.async_add_executor_job(
+                client.api_create_login_qr_code, LOGIN_TYPE_TO_QR_CODE_TYPE[login_type]
+            )
+            self.context["user_data"]["login_id"] = login_id
+            self.context["user_data"]["image_link"] = image_link
+            return self.async_show_form(
+                step_id=STEP_QR_LOGIN,
+                data_schema=vol.Schema(
+                    {vol.Required(CONF_REFRESH_QR_CODE, default=False): bool}
+                ),
+                description_placeholders={
+                    "description": f"<p>使用{LOGIN_TYPE_TO_QR_APP_NAME[login_type]}扫码登录。登录完成后，点击下一步。"
+                    f'</p><img src="{image_link}" alt="QR code" style="width: 200px;"/>',
+                },
+            )
+        if user_input[CONF_REFRESH_QR_CODE]:
+            return await self.async_step_qr_login()
+        return await self.async_step_validate_qr_login()
+
+    async def async_step_validate_qr_login(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Get QR scan status after user has scanned the code"""
+        client: CSGClient = CSGClient()
+        login_type = self.context["user_data"][CONF_LOGIN_TYPE]
+        login_id = self.context["user_data"]["login_id"]
+        ok, auth_token = await self.hass.async_add_executor_job(
+            client.api_get_qr_login_status, login_id
+        )
+        if ok:
+            # for QR login, use mobile number as username
+            client.set_authentication_params(auth_token)
+            user_info = await self.hass.async_add_executor_job(client.api_get_user_info)
+            username = user_info["mobile"]
+            await self.check_and_set_unique_id(username)
+            return await self.create_or_update_config_entry(
+                auth_token, login_type, "", username
+            )
+
+        # scan not detected, return to previous step
+        image_link = self.context["user_data"]["image_link"]
+        return self.async_show_form(
+            step_id=STEP_QR_LOGIN,
+            data_schema=vol.Schema(
+                {vol.Required(CONF_REFRESH_QR_CODE, default=False): bool}
+            ),
+            errors={CONF_GENERAL_ERROR: ERROR_QR_NOT_SCANNED},
+            # had to do this because strings.json conflicts with html tags
+            description_placeholders={
+                "description": f"<p>使用{LOGIN_TYPE_TO_QR_APP_NAME[login_type]}扫码登录。登录完成后，点击下一步。</p>"
+                f'<img src="{image_link}" alt="QR code" style="width: 200px;"/>',
+            },
+        )
+
+    async def check_and_set_unique_id(self, username: str):
+        """set unique id for the config entry, abort if already configured"""
+        # TODO: username (mobile) may not be the best unique id
+        unique_id = f"CSG-{username}"
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured()
+
+    async def create_or_update_config_entry(
+        self, auth_token, login_type, password, username
+    ) -> FlowResult:
+        """Create or update config entry
+        If the account is newly added, create a new entry
+        If the account is already added (reauth), update the existing entry"""
+        data = {
+            CONF_USERNAME: username,
+            CONF_PASSWORD: password,
+            CONF_LOGIN_TYPE: login_type,
+            CONF_AUTH_TOKEN: auth_token,
+            CONF_ELE_ACCOUNTS: {},
+            CONF_SETTINGS: {
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+            },
+            CONF_UPDATED_AT: str(int(time.time() * 1000)),
+        }
+        # handle normal creation and reauth
+        if self._reauth_entry:
+            # reauth
+            # save the old config and only update the auth related data
+            old_config = copy.deepcopy(self._reauth_entry.data)
+            data[CONF_ELE_ACCOUNTS] = old_config[CONF_ELE_ACCOUNTS]
+            data[CONF_SETTINGS] = old_config[CONF_SETTINGS]
+            self.hass.config_entries.async_update_entry(self._reauth_entry, data=data)
+            await self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
+            self._reauth_entry = None
+            return self.async_abort(reason="reauth_successful")
+        # normal creation
+        # check if account already exists
+
+        return self.async_create_entry(
+            title=f"CSG-{username}",
+            data=data,
         )
 
     async def async_step_reauth(self, user_input=None):
@@ -403,32 +515,6 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
 
         account_num_to_remove = user_input[CONF_ACCOUNT_NUMBER]
 
-        # remove entities and device
-        device_reg = device_registry.async_get(self.hass)
-        entity_reg = entity_registry.async_get(self.hass)
-        all_entities = {
-            ent.unique_id: ent.entity_id
-            for ent in entity_registry.async_entries_for_config_entry(
-                entity_reg, self.config_entry.entry_id
-            )
-        }
-
-        entities_removed = []
-        for unique_id, entity_id in all_entities.items():
-            _, account_no, _ = unique_id.split(".")
-            if account_no == account_num_to_remove:
-                entity_reg.async_remove(entity_id)
-                entities_removed.append(unique_id)
-        if entities_removed:
-            _LOGGER.info("Removed entities: %s", entities_removed)
-
-        device_identifier = {(DOMAIN, account_num_to_remove)}
-        device_entry = device_reg.async_get_device(device_identifier)
-        if device_entry:
-            device_reg.async_remove_device(device_entry.id)
-            device_removed = device_identifier
-            _LOGGER.info("Removed device: %s", device_removed)
-
         new_data = self.config_entry.data.copy()
         new_data[CONF_ELE_ACCOUNTS].pop(account_num_to_remove)
         new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
@@ -457,7 +543,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(CONF_UPDATE_INTERVAL, default=update_interval): vol.All(
-                    int, vol.Range(min=60)
+                    int, vol.Range(min=60), msg="刷新间隔不能低于60秒"
                 ),
             }
         )
