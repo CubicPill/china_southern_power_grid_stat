@@ -65,9 +65,6 @@
       "add_account": {
         "title": "选择缴费号"
       },
-      "remove_account": {
-        "title": "移除缴费号"
-      },
       "settings": {
         "title": "参数设置",
         "data": {

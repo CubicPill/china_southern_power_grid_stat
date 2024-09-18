@@ -62,9 +62,20 @@ from .const import (
     SUFFIX_THIS_YEAR_KWH,
     SUFFIX_YESTERDAY_KWH,
 )
-from .csg_client import (CSGAPIError, CSGClient, CSGElectricityAccount, JSON_KEY_METERING_POINT_NUMBER, NotLoggedIn,
-                         WF_ATTR_CHARGE, WF_ATTR_DATE, WF_ATTR_KWH, WF_ATTR_LADDER, WF_ATTR_LADDER_REMAINING_KWH,
-                         WF_ATTR_LADDER_START_DATE, WF_ATTR_LADDER_TARIFF)
+from .csg_client import (
+    JSON_KEY_METERING_POINT_NUMBER,
+    WF_ATTR_CHARGE,
+    WF_ATTR_DATE,
+    WF_ATTR_KWH,
+    WF_ATTR_LADDER,
+    WF_ATTR_LADDER_REMAINING_KWH,
+    WF_ATTR_LADDER_START_DATE,
+    WF_ATTR_LADDER_TARIFF,
+    CSGAPIError,
+    CSGClient,
+    CSGElectricityAccount,
+    NotLoggedIn,
+)
 
 _LOGGER = logging.getLogger(__name__)
 

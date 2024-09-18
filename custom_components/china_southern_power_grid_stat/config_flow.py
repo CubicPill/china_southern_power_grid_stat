@@ -21,14 +21,46 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from requests import RequestException
 
-from .const import (ABORT_ALL_ADDED, ABORT_NO_ACCOUNT, CONF_ACCOUNT_NUMBER, CONF_ACTION, CONF_AUTH_TOKEN,
-                    CONF_ELE_ACCOUNTS, CONF_GENERAL_ERROR, CONF_LOGIN_TYPE, CONF_REFRESH_QR_CODE, CONF_SETTINGS,
-                    CONF_SMS_CODE, CONF_UPDATED_AT, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN,
-                    ERROR_CANNOT_CONNECT, ERROR_INVALID_AUTH, ERROR_QR_NOT_SCANNED, ERROR_UNKNOWN,
-                    LOGIN_TYPE_TO_QR_APP_NAME, STEP_ADD_ACCOUNT, STEP_ALI_QR_LOGIN, STEP_CSG_QR_LOGIN, STEP_INIT,
-                    STEP_QR_LOGIN, STEP_SETTINGS, STEP_SMS_LOGIN, STEP_SMS_PWD_LOGIN, STEP_USER, STEP_VALIDATE_SMS_CODE,
-                    STEP_WX_QR_LOGIN)
-from .csg_client import (CSGClient, CSGElectricityAccount, InvalidCredentials, LOGIN_TYPE_TO_QR_CODE_TYPE, LoginType)
+from .const import (
+    ABORT_ALL_ADDED,
+    ABORT_NO_ACCOUNT,
+    CONF_ACCOUNT_NUMBER,
+    CONF_ACTION,
+    CONF_AUTH_TOKEN,
+    CONF_ELE_ACCOUNTS,
+    CONF_GENERAL_ERROR,
+    CONF_LOGIN_TYPE,
+    CONF_REFRESH_QR_CODE,
+    CONF_SETTINGS,
+    CONF_SMS_CODE,
+    CONF_UPDATE_INTERVAL,
+    CONF_UPDATED_AT,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    ERROR_CANNOT_CONNECT,
+    ERROR_INVALID_AUTH,
+    ERROR_QR_NOT_SCANNED,
+    ERROR_UNKNOWN,
+    LOGIN_TYPE_TO_QR_APP_NAME,
+    STEP_ADD_ACCOUNT,
+    STEP_ALI_QR_LOGIN,
+    STEP_CSG_QR_LOGIN,
+    STEP_INIT,
+    STEP_QR_LOGIN,
+    STEP_SETTINGS,
+    STEP_SMS_LOGIN,
+    STEP_SMS_PWD_LOGIN,
+    STEP_USER,
+    STEP_VALIDATE_SMS_CODE,
+    STEP_WX_QR_LOGIN,
+)
+from .csg_client import (
+    LOGIN_TYPE_TO_QR_CODE_TYPE,
+    CSGClient,
+    CSGElectricityAccount,
+    InvalidCredentials,
+    LoginType,
+)
 
 _LOGGER = logging.getLogger(__name__)
 

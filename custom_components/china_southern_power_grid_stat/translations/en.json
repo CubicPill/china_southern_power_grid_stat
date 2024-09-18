@@ -69,9 +69,6 @@
             "init": {
                 "title": "\u9009\u62e9\u64cd\u4f5c"
             },
-            "remove_account": {
-                "title": "\u79fb\u9664\u7f34\u8d39\u53f7"
-            },
             "settings": {
                 "data": {
                     "update_interval": "\u66f4\u65b0\u95f4\u9694\uff08\u79d2\uff09"

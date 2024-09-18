@@ -5,7 +5,12 @@ import os
 import sys
 import time
 
-from csg_client import (CSGClient, CSGElectricityAccount, LOGIN_TYPE_TO_QR_CODE_TYPE, LoginType)
+from csg_client import (
+    LOGIN_TYPE_TO_QR_CODE_TYPE,
+    CSGClient,
+    CSGElectricityAccount,
+    LoginType,
+)
 
 QR_SCAN_TIMEOUT = 300
 
