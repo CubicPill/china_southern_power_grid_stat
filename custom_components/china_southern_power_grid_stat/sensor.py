@@ -1,4 +1,5 @@
 """Sensors for the China Southern Power Grid Statistics integration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -16,11 +17,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_USERNAME,
-    STATE_UNAVAILABLE,
-    UnitOfEnergy,
-)
+from homeassistant.const import CONF_USERNAME, STATE_UNAVAILABLE, UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.entity import DeviceInfo
@@ -65,20 +62,9 @@ from .const import (
     SUFFIX_THIS_YEAR_KWH,
     SUFFIX_YESTERDAY_KWH,
 )
-from .csg_client import (
-    CSGAPIError,
-    CSGClient,
-    CSGElectricityAccount,
-    JSON_KEY_METERING_POINT_NUMBER,
-    NotLoggedIn,
-    WF_ATTR_CHARGE,
-    WF_ATTR_DATE,
-    WF_ATTR_KWH,
-    WF_ATTR_LADDER,
-    WF_ATTR_LADDER_REMAINING_KWH,
-    WF_ATTR_LADDER_START_DATE,
-    WF_ATTR_LADDER_TARIFF,
-)
+from .csg_client import (CSGAPIError, CSGClient, CSGElectricityAccount, JSON_KEY_METERING_POINT_NUMBER, NotLoggedIn,
+                         WF_ATTR_CHARGE, WF_ATTR_DATE, WF_ATTR_KWH, WF_ATTR_LADDER, WF_ATTR_LADDER_REMAINING_KWH,
+                         WF_ATTR_LADDER_START_DATE, WF_ATTR_LADDER_TARIFF)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -966,6 +952,7 @@ class CSGCoordinator(DataUpdateCoordinator):
         metering_point_data = {}
         config_entry_need_update = False
         await self._async_refresh_client()
+        new_config = self._config.copy()
         for account_number, account_data in self._config[CONF_ELE_ACCOUNTS].items():
             self._gathered_data[account_number] = {}
             account = CSGElectricityAccount.load(account_data)
@@ -973,30 +960,30 @@ class CSGCoordinator(DataUpdateCoordinator):
             if not account.metering_point_number:
                 if not metering_point_data:
                     ok, data = await self._async_fetch(
-                        self._client.api_get_metering_point(
-                            account.area_code, account.ele_customer_id
-                        )
+                        self._client.api_get_metering_point,
+                        account.area_code,
+                        account.ele_customer_id,
                     )
                     if ok:
                         metering_point_data = data
                 if metering_point_data:
                     for mp in metering_point_data:
                         if mp["eleCustNumber"] == account.account_number:
+                            config_entry_need_update = True
                             account.metering_point_number = mp[
                                 JSON_KEY_METERING_POINT_NUMBER
                             ]
-                            self._config[CONF_ELE_ACCOUNTS][
+                            new_config[CONF_ELE_ACCOUNTS][
                                 account_number
                             ] = account.dump()
-                            config_entry_need_update = True
                             break
 
             await self._async_update_account_data(account)
         if config_entry_need_update:
-            self._config[CONF_UPDATED_AT] = str(int(time.time() * 1000))
+            new_config[CONF_UPDATED_AT] = str(int(time.time() * 1000))
             self.hass.config_entries.async_update_entry(
                 self.hass.config_entries.async_get_entry(self._config_entry_id),
-                data=self._config,
+                data=new_config,
             )
             _LOGGER.debug("Updated accounts with metering point number")
         _LOGGER.debug("Coordinator update took %s seconds", time.time() - start_time)

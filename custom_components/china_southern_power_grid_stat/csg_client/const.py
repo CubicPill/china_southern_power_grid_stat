@@ -1,4 +1,5 @@
 """Constants for csg_client"""
+
 from enum import Enum
 
 BASE_PATH_WEB = "https://95598.csg.cn/ucs/ma/wt/"

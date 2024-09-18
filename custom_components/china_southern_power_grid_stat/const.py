@@ -1,4 +1,5 @@
 """Constants for the China Southern Power Grid Statistics integration."""
+
 from datetime import timedelta
 
 from .csg_client import LoginType

@@ -26,10 +26,7 @@ from .csg_client import (
     InvalidCredentials,
     NotLoggedIn,
 )
-from .sensor import (
-    CSGCostSensor,
-    CSGEnergySensor,
-)
+from .sensor import CSGCostSensor, CSGEnergySensor
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 _LOGGER = logging.getLogger(__name__)

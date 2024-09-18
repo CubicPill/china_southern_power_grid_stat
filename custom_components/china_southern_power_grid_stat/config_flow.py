@@ -21,46 +21,14 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from requests import RequestException
 
-from .const import (
-    ABORT_ALL_ADDED,
-    ABORT_NO_ACCOUNT,
-    CONF_ACCOUNT_NUMBER,
-    CONF_ACTION,
-    CONF_AUTH_TOKEN,
-    CONF_ELE_ACCOUNTS,
-    CONF_GENERAL_ERROR,
-    CONF_LOGIN_TYPE,
-    CONF_REFRESH_QR_CODE,
-    CONF_SETTINGS,
-    CONF_SMS_CODE,
-    CONF_UPDATED_AT,
-    CONF_UPDATE_INTERVAL,
-    DEFAULT_UPDATE_INTERVAL,
-    DOMAIN,
-    ERROR_CANNOT_CONNECT,
-    ERROR_INVALID_AUTH,
-    ERROR_QR_NOT_SCANNED,
-    ERROR_UNKNOWN,
-    LOGIN_TYPE_TO_QR_APP_NAME,
-    STEP_ADD_ACCOUNT,
-    STEP_ALI_QR_LOGIN,
-    STEP_CSG_QR_LOGIN,
-    STEP_INIT,
-    STEP_QR_LOGIN,
-    STEP_SETTINGS,
-    STEP_SMS_LOGIN,
-    STEP_SMS_PWD_LOGIN,
-    STEP_USER,
-    STEP_VALIDATE_SMS_CODE,
-    STEP_WX_QR_LOGIN,
-)
-from .csg_client import (
-    CSGClient,
-    CSGElectricityAccount,
-    InvalidCredentials,
-    LOGIN_TYPE_TO_QR_CODE_TYPE,
-    LoginType,
-)
+from .const import (ABORT_ALL_ADDED, ABORT_NO_ACCOUNT, CONF_ACCOUNT_NUMBER, CONF_ACTION, CONF_AUTH_TOKEN,
+                    CONF_ELE_ACCOUNTS, CONF_GENERAL_ERROR, CONF_LOGIN_TYPE, CONF_REFRESH_QR_CODE, CONF_SETTINGS,
+                    CONF_SMS_CODE, CONF_UPDATED_AT, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN,
+                    ERROR_CANNOT_CONNECT, ERROR_INVALID_AUTH, ERROR_QR_NOT_SCANNED, ERROR_UNKNOWN,
+                    LOGIN_TYPE_TO_QR_APP_NAME, STEP_ADD_ACCOUNT, STEP_ALI_QR_LOGIN, STEP_CSG_QR_LOGIN, STEP_INIT,
+                    STEP_QR_LOGIN, STEP_SETTINGS, STEP_SMS_LOGIN, STEP_SMS_PWD_LOGIN, STEP_USER, STEP_VALIDATE_SMS_CODE,
+                    STEP_WX_QR_LOGIN)
+from .csg_client import (CSGClient, CSGElectricityAccount, InvalidCredentials, LOGIN_TYPE_TO_QR_CODE_TYPE, LoginType)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -467,9 +435,9 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         for account in accounts:
             if account.account_number not in all_account_numbers:
                 # avoid adding one ele account twice
-                selections[
-                    account.account_number
-                ] = f"{account.account_number} ({account.user_name} {account.address})"
+                selections[account.account_number] = (
+                    f"{account.account_number} ({account.user_name} {account.address})"
+                )
         if not selections:
             _LOGGER.info(
                 "Account %s: no ele account to add (all already added), abort",
