@@ -752,21 +752,21 @@ class CSGCoordinator(DataUpdateCoordinator):
 
         if success_cost:
             (
-                last_month_cost,
-                last_month_kwh_from_cost,
+                _,
+                _,
                 _,  # ladder is discarded
                 last_month_by_day_from_cost,
             ) = result_cost
 
             # for last month, it's safe to calculate total kwh from cost
-            if not last_month_cost:
-                last_month_cost = sum(
-                    d[WF_ATTR_CHARGE] for d in last_month_by_day_from_cost
-                )
-            if not last_month_kwh_from_cost:
-                last_month_kwh_from_cost = sum(
-                    d[WF_ATTR_KWH] for d in last_month_by_day_from_cost
-                )
+            # if not last_month_cost:
+            last_month_cost = sum(
+                d[WF_ATTR_CHARGE] for d in last_month_by_day_from_cost
+            )
+            # if not last_month_kwh_from_cost:
+            last_month_kwh_from_cost = sum(
+                d[WF_ATTR_KWH] for d in last_month_by_day_from_cost
+            )
         else:
             (
                 last_month_cost,
