@@ -377,7 +377,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        self._csg_config_entry = config_entry
         self.all_electricity_accounts: list[CSGElectricityAccount] = []
 
     async def async_step_init(
@@ -418,22 +418,22 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
             for account in self.all_electricity_accounts:
                 if account.account_number == account_num_to_add:
                     # store the account config in main entry instead of creating new entries
-                    new_data = self.config_entry.data.copy()
+                    new_data = self._csg_config_entry.data.copy()
                     new_data[CONF_ELE_ACCOUNTS][account_num_to_add] = account.dump()
                     # this must be set or update won't be detected
                     new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
                     self.hass.config_entries.async_update_entry(
-                        self.config_entry,
+                        self._csg_config_entry,
                         data=new_data,
                     )
                     _LOGGER.info(
                         "Added ele account to %s: %s",
-                        self.config_entry.data[CONF_USERNAME],
+                        self._csg_config_entry.data[CONF_USERNAME],
                         account_num_to_add,
                     )
                     _LOGGER.info("Reloading entry because of new added account")
                     await self.hass.config_entries.async_reload(
-                        self.config_entry.entry_id
+                        self._csg_config_entry.entry_id
                     )
                     return self.async_create_entry(
                         title="",
@@ -444,7 +444,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         # start of getting all unbound accounts
         client = CSGClient.load(
             {
-                CONF_AUTH_TOKEN: self.config_entry.data[CONF_AUTH_TOKEN],
+                CONF_AUTH_TOKEN: self._csg_config_entry.data[CONF_AUTH_TOKEN],
             }
         )
         logged_in = await self.hass.async_add_executor_job(client.verify_login)
@@ -460,7 +460,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         if not accounts:
             _LOGGER.warning(
                 "No linked ele accounts found in csg account %s",
-                self.config_entry.data[CONF_USERNAME],
+                self._csg_config_entry.data[CONF_USERNAME],
             )
             return self.async_abort(reason=ABORT_NO_ACCOUNT)
         selections = {}
@@ -473,7 +473,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         if not selections:
             _LOGGER.info(
                 "Account %s: no ele account to add (all already added), abort",
-                self.config_entry.data[CONF_USERNAME],
+                self._csg_config_entry.data[CONF_USERNAME],
             )
             return self.async_abort(reason=ABORT_ALL_ADDED)
 
@@ -491,7 +491,7 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Settings of parameters"""
-        update_interval = self.config_entry.data[CONF_SETTINGS][CONF_UPDATE_INTERVAL]
+        update_interval = self._csg_config_entry.data[CONF_SETTINGS][CONF_UPDATE_INTERVAL]
         schema = vol.Schema(
             {
                 vol.Required(CONF_UPDATE_INTERVAL, default=update_interval): vol.All(
@@ -502,11 +502,11 @@ class CSGOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is None:
             return self.async_show_form(step_id=STEP_SETTINGS, data_schema=schema)
 
-        new_data = self.config_entry.data.copy()
+        new_data = self._csg_config_entry.data.copy()
         new_data[CONF_SETTINGS][CONF_UPDATE_INTERVAL] = user_input[CONF_UPDATE_INTERVAL]
         new_data[CONF_UPDATED_AT] = str(int(time.time() * 1000))
         self.hass.config_entries.async_update_entry(
-            self.config_entry,
+            self._csg_config_entry,
             data=new_data,
         )
         return self.async_create_entry(
