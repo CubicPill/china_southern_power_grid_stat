@@ -200,7 +200,7 @@ class CSGClient:
             "Content-Type": "application/json;charset=utf-8",
             "Origin": "file://",
             HEADER_X_AUTH_TOKEN: "",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate",
             "Connection": "keep-alive",
             "Accept": "application/json, text/plain, */*",
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
@@ -244,8 +244,8 @@ class CSGClient:
             headers[HEADER_X_AUTH_TOKEN] = self.auth_token
             headers[HEADER_CUST_NUMBER] = self.customer_number
         if method == "POST":
-            # timeout=(connect, read): a hung request would otherwise block
-            # the executor thread forever and deadlock integration unload
+            # timeout=(connect, read) to prevent hung requests from blocking
+            # the executor thread forever (which deadlocks entry unload)
             response = self._session.post(
                 url, json=payload, headers=headers, timeout=(10, 60)
             )
@@ -587,6 +587,57 @@ class CSGClient:
             return resp_data[JSON_KEY_DATA]
         self._handle_unsuccessful_response(path, resp_data)
 
+    def api_query_annual_electricity_tier_info(
+        self, area_code: str, ele_customer_id: str, metering_point_id: str, year_month: tuple[int, int]
+    ) -> dict:
+        """Query annual electricity tier (ladder) pricing information
+
+        Returns complete ladder tier information including:
+        - Current tier and tariff
+        - Yearly cumulative consumption
+        - Remaining kWh to next tier
+        - All tier definitions
+
+        Args:
+            area_code: Area code (e.g., "050100")
+            ele_customer_id: Electricity customer ID
+            metering_point_id: Metering point ID
+            year_month: Tuple of (year, month) for the query
+        """
+        year, month = year_month
+        path = "charge/queryAnnualElectricityTierInfo"
+        payload = {
+            JSON_KEY_AREA_CODE: area_code,
+            JSON_KEY_ELE_CUST_ID: ele_customer_id,
+            JSON_KEY_METERING_POINT_ID: metering_point_id,
+            "yearMonth": f"{year}{month:02d}",
+        }
+        _, resp_data = self._make_request(path, payload)
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
+        self._handle_unsuccessful_response(path, resp_data)
+
+    def api_query_calendar_ladder_trip_stop(
+        self, area_code: str, ele_cust_number: str
+    ) -> dict:
+        """Query ladder (tiered pricing) information from calendar
+
+        Returns complete ladder tier information including:
+        - Current ladder tier and tariff
+        - Remaining kWh to next tier
+        - Yearly ladder total consumption
+        - All available ladder tiers with pricing
+        """
+        path = "ltsn/queryCalendarLadderTripStop"
+        payload = {
+            JSON_KEY_AREA_CODE: area_code,
+            "eleCustNumber": ele_cust_number,
+        }
+        _, resp_data = self._make_request(path, payload)
+        if resp_data[JSON_KEY_STA] == RESP_STA_SUCCESS:
+            return resp_data[JSON_KEY_DATA]
+        self._handle_unsuccessful_response(path, resp_data)
+
     def api_logout(self, logon_chan: str, cred_type: LoginType) -> None:
         """logout"""
         path = "center/logout"
@@ -697,25 +748,45 @@ class CSGClient:
     def get_month_daily_cost_detail(
         self, account: CSGElectricityAccount, year_month: tuple[int, int]
     ) -> tuple[float | None, float | None, dict, list[dict[str, str | float]]]:
-        """Get daily cost of current month"""
+        """Get daily cost of current month
+
+        Implements fallback to yearly stats when primary API fails due to server errors.
+        """
 
         year, month = year_month
 
-        resp_data = self.api_query_day_electric_charge_by_m_point(
-            year,
-            month,
-            account.area_code,
-            account.ele_customer_id,
-            account.metering_point_id,
-        )
+        # Try primary API first, fall back to yearly stats on API error
+        try:
+            resp_data = self.api_query_day_electric_charge_by_m_point(
+                year,
+                month,
+                account.area_code,
+                account.ele_customer_id,
+                account.metering_point_id,
+            )
+        except CSGAPIError as api_err:
+            _LOGGER.warning(
+                "Primary month detail API failed: %s. Using fallback method.",
+                api_err
+            )
+            return self._get_month_detail_from_year_stats(account, year_month)
 
         by_day = []
         for d_data in resp_data["result"]:
+            charge = None
+            if d_data.get("charge") is not None:
+                charge = float(d_data["charge"])
+            # Calculate daily cost from power and tariff if charge is not available
+            elif d_data.get("power") is not None and resp_data.get("ladderEleTariff") is not None:
+                power = float(d_data["power"])
+                tariff = float(resp_data["ladderEleTariff"])
+                charge = round(power * tariff, 2)
+
             by_day.append(
                 {
                     WF_ATTR_DATE: d_data["date"],
-                    WF_ATTR_CHARGE: float(d_data["charge"]),
-                    WF_ATTR_KWH: float(d_data["power"]),
+                    WF_ATTR_CHARGE: charge,
+                    WF_ATTR_KWH: float(d_data["power"]) if d_data.get("power") is not None else None,
                 }
             )
 
@@ -751,6 +822,17 @@ class CSGClient:
             current_tariff = float(resp_data["ladderEleTariff"])
         else:
             current_tariff = None
+
+        # Calculate cost from usage and tariff if cost is not available
+        # Note: This is an approximation as tiered pricing may change during the month
+        if month_total_cost is None and month_total_kwh is not None and current_tariff is not None:
+            month_total_cost = round(month_total_kwh * current_tariff, 2)
+            _LOGGER.debug(
+                "Calculated month_total_cost from usage: %s kWh × %s = %s",
+                month_total_kwh,
+                current_tariff,
+                month_total_cost,
+            )
         # TODO what will happen to `current_ladder_remaining_kwh` when it's the last ladder?
         ladder = {
             WF_ATTR_LADDER: current_ladder,
@@ -795,12 +877,234 @@ class CSGClient:
             )
         return float(total_year_charge), float(total_year_kwh), by_month
 
+    def _get_month_detail_from_year_stats(
+        self, account: CSGElectricityAccount, year_month: tuple[int, int]
+    ) -> tuple[float | None, float | None, dict, list[dict[str, str | float]]]:
+        """Fallback method to get month detail from yearly stats when primary API fails
+
+        This is used when api_query_day_electric_charge_by_m_point fails with server errors.
+        It extracts the current month data from the yearly stats' electricAndChargeList.
+
+        For the current month (when bill is not ready yet):
+        - Try to get usage from usage API
+        - Calculate cost from usage × tier price
+        - Calculate current tier and remaining kWh from yearly accumulation
+        """
+        from .const import LADDER_TIER_DEFINITIONS
+
+        year, month = year_month
+        now = datetime.datetime.now()
+        is_current_month = (year == now.year and month == now.month)
+
+        _LOGGER.warning(
+            "Primary API failed, using fallback method for month %s-%s (is_current=%s)",
+            year, month, is_current_month
+        )
+
+        resp_data = self.api_get_fee_analyze_details(
+            year, account.area_code, account.ele_customer_id
+        )
+
+        month_str = f"{year}-{month:02d}"
+
+        # Find current month data from the list
+        month_total_cost = None
+        month_total_kwh = None
+        for m_data in resp_data["electricAndChargeList"]:
+            if m_data[JSON_KEY_YEAR_MONTH] == month_str:
+                month_total_cost = float(m_data["actualTotalAmount"])
+                month_total_kwh = float(m_data["billingElectricity"])
+                break
+
+        # If current month and not in yearly stats yet, try to get usage and calculate
+        if month_total_kwh is None and is_current_month:
+            _LOGGER.info("Current month not in yearly stats, trying to get usage data")
+            try:
+                # Try to get usage from the usage API (this might still work)
+                month_total_kwh, _ = self.get_month_daily_usage_detail(account, year_month)
+            except Exception as e:
+                _LOGGER.warning("Failed to get current month usage: %s", e)
+
+        # Calculate tier info from yearly accumulation
+        # Get total year kWh to determine current tier
+        total_year_kwh = resp_data.get("totalBillingElectricity", 0)
+        if total_year_kwh is not None:
+            total_year_kwh = float(total_year_kwh)
+        else:
+            total_year_kwh = 0.0
+
+        # Determine current tier based on yearly accumulation
+        current_ladder = None
+        current_ladder_tariff = None
+        current_ladder_remaining_kwh = None
+
+        # Find which tier we're in based on yearly accumulation
+        for tier_num, tier_key in enumerate(["tier_1", "tier_2", "tier_3", "tier_4"], 1):
+            tier = LADDER_TIER_DEFINITIONS[tier_key]
+            range_min = tier["range_min"]
+            range_max = tier["range_max"]
+            price = tier["price"]
+
+            if range_max is None:
+                # Last tier (no upper limit)
+                if total_year_kwh >= range_min:
+                    current_ladder = tier_num
+                    current_ladder_tariff = price
+                    current_ladder_remaining_kwh = None  # No limit for last tier
+            else:
+                if range_min <= total_year_kwh <= range_max:
+                    current_ladder = tier_num
+                    current_ladder_tariff = price
+                    current_ladder_remaining_kwh = range_max - total_year_kwh
+                    break
+                elif total_year_kwh < range_min:
+                    # Haven't reached this tier yet, use previous tier
+                    if tier_num > 1:
+                        prev_tier = LADDER_TIER_DEFINITIONS[f"tier_{tier_num - 1}"]
+                        current_ladder = tier_num - 1
+                        current_ladder_tariff = prev_tier["price"]
+                        prev_max = prev_tier["range_max"]
+                        if prev_max is not None:
+                            current_ladder_remaining_kwh = prev_max - total_year_kwh
+                    break
+
+        # Calculate cost if we have usage and tariff but no cost
+        if month_total_cost is None and month_total_kwh is not None and current_ladder_tariff is not None:
+            month_total_cost = round(month_total_kwh * current_ladder_tariff, 2)
+            _LOGGER.info(
+                "Calculated month cost from usage: %s kWh × %s = %s CNY (tier %d)",
+                month_total_kwh, current_ladder_tariff, month_total_cost, current_ladder
+            )
+
+        ladder = {
+            WF_ATTR_LADDER: current_ladder,
+            WF_ATTR_LADDER_START_DATE: None,  # Not available in fallback
+            WF_ATTR_LADDER_REMAINING_KWH: current_ladder_remaining_kwh,
+            WF_ATTR_LADDER_TARIFF: current_ladder_tariff,
+        }
+
+        by_day = []  # Fallback doesn't provide daily data
+
+        _LOGGER.info(
+            "Fallback method retrieved: %s kWh, %s CNY for %s (tier %d, %.4f CNY/kWh, remaining: %s kWh)",
+            month_total_kwh, month_total_cost, month_str,
+            current_ladder, current_ladder_tariff, current_ladder_remaining_kwh
+        )
+
+        return month_total_cost, month_total_kwh, ladder, by_day
+
     def get_yesterday_kwh(self, account: CSGElectricityAccount) -> float:
         """Get power consumption(kwh) of yesterday"""
         resp_data = self.api_query_day_electric_by_m_point_yesterday(
             account.area_code, account.ele_customer_id
         )
-        if resp_data["power"] is not None:
+        if resp_data.get("power") is not None:
             return float(resp_data["power"])
+        return 0.0
+
+    def get_yearly_ladder_info(
+        self, account: CSGElectricityAccount, year: int
+    ) -> dict:
+        """Get yearly ladder (tiered pricing) cumulative consumption
+        Returns dict with:
+        - total_kwh: Yearly cumulative consumption for tiered pricing calculation
+        """
+        # Get year's total consumption from fee analyze
+        total_year_charge, total_year_kwh, _ = self.get_year_month_stats(
+            account, year
+        )
+
+        return {
+            WF_ATTR_YEARLY_LADDER_TOTAL_KWH: total_year_kwh,
+        }
+
+    def get_calendar_ladder_info(
+        self, account: CSGElectricityAccount, year_month: tuple[int, int]
+    ) -> dict:
+        """Get complete ladder (tiered pricing) information from annual tier info API
+
+        This is a dedicated API that returns complete ladder tier information directly,
+        including current tier, tariff, remaining kWh, and all available tiers.
+
+        Returns dict with:
+        - ladder: Current ladder tier (1-4)
+        - tariff: Current ladder tariff (CNY/kWh)
+        - remaining_kwh: Remaining kWh to next tier
+        - start_date: Ladder period start date
+        - end_date: Ladder period end date
+        - yearly_ladder_total_kwh: Yearly cumulative consumption
+        - all_tiers: List of all available tiers with pricing
+        """
+        import datetime
+
+        resp_data = self.api_query_annual_electricity_tier_info(
+            account.area_code,
+            account.ele_customer_id,
+            account.metering_point_id,
+            year_month
+        )
+
+        # Parse current ladder name to extract tier number
+        # E.g., "【电能替代】" → 1, "【居民阶梯一】" → 2
+        current_gear_name = resp_data.get("currentGear", "")
+        current_ladder = None
+
+        # Map ladder names to tier numbers
+        ladder_name_to_tier = {
+            "电能替代": 1,
+            "居民阶梯一": 2,
+            "居民阶梯二": 3,
+            "居民阶梯三": 4,
+        }
+
+        # Extract name from brackets
+        for name, tier_num in ladder_name_to_tier.items():
+            if name in current_gear_name:
+                current_ladder = tier_num
+                break
+
+        # If current_ladder is still None, try to determine from ladderInfoList
+        if current_ladder is None:
+            total_electricity = float(resp_data.get("totalElectricityOfYear", 0))
+            for i, tier_info in enumerate(resp_data.get("ladderInfoList", []), 1):
+                threshold_bottom = int(tier_info.get("threshholdBottom", 0))
+                threshold_top = int(tier_info.get("threshholdTop", 9999999))
+                if threshold_bottom <= total_electricity <= threshold_top:
+                    current_ladder = i
+                    break
+
+        # Parse ladder info list
+        ladder_list = []
+        for tier_info in resp_data.get("ladderInfoList", []):
+            ladder_list.append({
+                "name": tier_info.get("ladderName"),
+                "price": float(tier_info.get("priceValue", 0)),
+                "range_min": int(tier_info.get("threshholdBottom", 0)),
+                "range_max": int(tier_info.get("threshholdTop", 0)),
+            })
+
+        ladder_info = {
+            WF_ATTR_LADDER: current_ladder,
+            WF_ATTR_LADDER_TARIFF: float(resp_data.get("currentElectricityPrice", 0)) if resp_data.get("currentElectricityPrice") else None,
+            WF_ATTR_LADDER_REMAINING_KWH: float(resp_data.get("gearPowerLeft", 0)) if resp_data.get("gearPowerLeft") else None,
+            WF_ATTR_LADDER_START_DATE: resp_data.get("startDate"),
+            WF_ATTR_YEARLY_LADDER_TOTAL_KWH: float(resp_data.get("totalElectricityOfYear", 0)) if resp_data.get("totalElectricityOfYear") else None,
+            # Additional fields
+            "ladder_end_date": resp_data.get("endDate"),
+            "current_ladder_name": current_gear_name.replace("【", "").replace("】", ""),
+            "business_date": resp_data.get("businessDate"),
+            "all_tiers": ladder_list,
+        }
+
+        _LOGGER.info(
+            "Annual tier info API returned: tier=%s (%s), tariff=%s, remaining=%s kWh, yearly_total=%s kWh",
+            ladder_info[WF_ATTR_LADDER],
+            ladder_info["current_ladder_name"],
+            ladder_info[WF_ATTR_LADDER_TARIFF],
+            ladder_info[WF_ATTR_LADDER_REMAINING_KWH],
+            ladder_info[WF_ATTR_YEARLY_LADDER_TOTAL_KWH],
+        )
+
+        return ladder_info
 
     # end high-level api wrappers
