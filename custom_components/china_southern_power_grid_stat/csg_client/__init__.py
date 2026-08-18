@@ -968,13 +968,28 @@ class CSGClient:
                             current_ladder_remaining_kwh = prev_max - total_year_kwh
                     break
 
-        # Calculate cost if we have usage and tariff but no cost
-        if month_total_cost is None and month_total_kwh is not None and current_ladder_tariff is not None:
-            month_total_cost = round(month_total_kwh * current_ladder_tariff, 2)
-            _LOGGER.info(
-                "Calculated month cost from usage: %s kWh × %s = %s CNY (tier %d)",
-                month_total_kwh, current_ladder_tariff, month_total_cost, current_ladder
+        # Calculate cost if we have usage but no cost. Prefer the real
+        # average unit price from settled bills: time-of-use accounts
+        # (e.g. EV charging piles) cannot be estimated from the flat
+        # tier tariff.
+        if month_total_cost is None and month_total_kwh is not None:
+            bill_cost = 0.0
+            bill_kwh = 0.0
+            for m_data in resp_data.get("electricAndChargeList", []):
+                try:
+                    bill_cost += float(m_data["actualTotalAmount"])
+                    bill_kwh += float(m_data["billingElectricity"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+            est_price = (
+                bill_cost / bill_kwh if bill_kwh > 0 else current_ladder_tariff
             )
+            if est_price is not None:
+                month_total_cost = round(month_total_kwh * est_price, 2)
+                _LOGGER.info(
+                    "Calculated month cost from usage: %s kWh × %s (avg) = %s CNY",
+                    month_total_kwh, round(est_price, 4), month_total_cost,
+                )
 
         ladder = {
             WF_ATTR_LADDER: current_ladder,

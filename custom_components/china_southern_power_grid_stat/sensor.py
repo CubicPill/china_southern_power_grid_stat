@@ -971,16 +971,31 @@ class CSGCoordinator(DataUpdateCoordinator):
                     latest_day_cost = STATE_UNAVAILABLE
                     latest_day_date = STATE_UNAVAILABLE
 
-        # Calculate latest_day_cost from latest_day_kwh if not available
+        # Calculate latest_day_cost from latest_day_kwh if not available.
+        # Prefer the real average unit price from settled bills:
+        # time-of-use accounts cannot be estimated from the flat tier tariff.
         if latest_day_cost == STATE_UNAVAILABLE and latest_day_kwh not in [STATE_UNAVAILABLE, None]:
             current_tariff = self._gathered_data[account.account_number].get(
                 SUFFIX_CURRENT_LADDER_TARIFF
             )
-            if current_tariff not in [STATE_UNAVAILABLE, STATE_UPDATE_UNCHANGED, None]:
-                latest_day_cost = round(latest_day_kwh * current_tariff, 2)
+            if current_tariff in [STATE_UNAVAILABLE, STATE_UPDATE_UNCHANGED]:
+                current_tariff = None
+            est_price = current_tariff
+            try:
+                tym = self._gathered_data[account.account_number][
+                    ATTR_KEY_THIS_YEAR_BY_MONTH
+                ][ATTR_KEY_THIS_YEAR_BY_MONTH]
+                bill_cost = sum(float(m.get(WF_ATTR_CHARGE) or 0) for m in tym)
+                bill_kwh = sum(float(m.get(WF_ATTR_KWH) or 0) for m in tym)
+                if bill_kwh > 0:
+                    est_price = bill_cost / bill_kwh
+            except (KeyError, TypeError, ValueError):
+                pass
+            if est_price is not None:
+                latest_day_cost = round(latest_day_kwh * est_price, 2)
                 _LOGGER.debug(
-                    "Calculated latest_day_cost from latest_day_kwh: %s kWh × %s = %s CNY",
-                    latest_day_kwh, current_tariff, latest_day_cost
+                    "Calculated latest_day_cost from latest_day_kwh: %s kWh × %s (avg) = %s CNY",
+                    latest_day_kwh, round(est_price, 4), latest_day_cost
                 )
 
         self._gathered_data[account.account_number][
