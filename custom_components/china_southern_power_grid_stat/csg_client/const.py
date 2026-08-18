@@ -106,3 +106,16 @@ WF_ATTR_DATE = "date"
 WF_ATTR_MONTH = "month"
 WF_ATTR_CHARGE = "charge"
 WF_ATTR_KWH = "kwh"
+
+# Ladder (Tiered Pricing) Information
+# These are standard tier ranges for Guangdong region
+# May vary by region, can be overridden dynamically from API
+LADDER_TIER_DEFINITIONS = {
+    "tier_1": {"name": "电能替代", "range_min": 0, "range_max": 1560, "price": 0.3595},
+    "tier_2": {"name": "居民阶梯一", "range_min": 1561, "range_max": 3600, "price": 0.4495},
+    "tier_3": {"name": "居民阶梯二", "range_min": 3601, "range_max": 4680, "price": 0.4995},
+    "tier_4": {"name": "居民阶梯三", "range_min": 4681, "range_max": None, "price": 0.7995},
+}
+
+# Additional ladder attribute key for yearly ladder total kWh
+WF_ATTR_YEARLY_LADDER_TOTAL_KWH = "yearly_ladder_total_kwh"

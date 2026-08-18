@@ -58,8 +58,13 @@ SUFFIX_ARR = "arrears"
 SUFFIX_YESTERDAY_KWH = "yesterday_kwh"
 SUFFIX_LATEST_DAY_KWH = "latest_day_kwh"
 SUFFIX_LATEST_DAY_COST = "latest_day_cost"
+# Yearly bill sensors (settled months only)
+SUFFIX_THIS_YEAR_BILL_KWH = "this_year_bill_usage"
+SUFFIX_THIS_YEAR_BILL_COST = "this_year_bill_cost"
+# Yearly actual sensors (bill + current month)
 SUFFIX_THIS_YEAR_KWH = "this_year_total_usage"
 SUFFIX_THIS_YEAR_COST = "this_year_total_cost"
+# Month sensors
 SUFFIX_THIS_MONTH_KWH = "this_month_total_usage"
 SUFFIX_THIS_MONTH_COST = "this_month_total_cost"
 SUFFIX_CURRENT_LADDER = "current_ladder"
@@ -89,6 +94,21 @@ SETTING_LAST_MONTH_UPDATE_DAY_THRESHOLD = 3
 # the first n days in a year that will get data of last year
 SETTING_LAST_YEAR_UPDATE_DAY_THRESHOLD = 7
 
+# Ladder tier name mapping
+LADDER_TIER_NAMES = {
+    1: "电能替代",
+    2: "居民阶梯一",
+    3: "居民阶梯二",
+    4: "居民阶梯三",
+}
+
+# Yearly ladder (tiered pricing) sensors
+SUFFIX_YEARLY_LADDER_TOTAL_KWH = "yearly_ladder_total_kwh"
 
 # defaults
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=4).seconds
+
+# Auto retry settings
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY = 5  # seconds
+RETRY_BACKOFF_MULTIPLIER = 2
